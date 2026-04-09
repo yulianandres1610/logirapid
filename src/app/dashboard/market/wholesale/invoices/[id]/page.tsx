@@ -32,6 +32,9 @@ import {
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
+import jsPDF from 'jspdf'
+import JsBarcode from 'jsbarcode'
+import { detectBrandFromHost, brands } from '@/lib/brand-config'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
@@ -307,6 +310,178 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     setPaymentEntries(paymentEntries.filter(p => p.id !== id))
   }
 
+  // ── PDF Generation ──
+  const generateBarcodeDataUrl = (code: string): string => {
+    try {
+      const canvas = document.createElement('canvas')
+      JsBarcode(canvas, code, { format: 'CODE128', width: 2, height: 60, displayValue: false, margin: 5, background: '#ffffff', lineColor: '#000000' })
+      return canvas.toDataURL('image/png')
+    } catch { return '' }
+  }
+
+  const loadImageAsDataUrl = (src: string): Promise<{ dataUrl: string; width: number; height: number }> => {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+        const ctx = canvas.getContext('2d')
+        if (ctx) { ctx.drawImage(img, 0, 0); resolve({ dataUrl: canvas.toDataURL('image/png'), width: img.naturalWidth, height: img.naturalHeight }) }
+        else resolve({ dataUrl: '', width: 0, height: 0 })
+      }
+      img.onerror = () => resolve({ dataUrl: '', width: 0, height: 0 })
+      img.src = src
+    })
+  }
+
+  const downloadInvoicePdf = async (mode: 'usd' | 'cup') => {
+    if (!invoice) return
+    const brandName = detectBrandFromHost(window.location.hostname)
+    const brand = brands[brandName]
+    const pr = brandName === 'servisumic' ? [235, 91, 12] : [204, 10, 70]
+    const sr = brandName === 'servisumic' ? [63, 59, 57] : [3, 96, 229]
+    const cupRate = rates.CUP
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
+    const pw = 215.9, ph = 279.4, mg = 14, cw = pw - mg * 2
+    let y = 14
+
+    const fmtUSD = (n: number) => `$${n.toFixed(2)}`
+    const fmtCUP = (n: number) => `${Math.round(n * cupRate).toLocaleString('es-ES')} CUP`
+
+    // Logo
+    const logoImg = await loadImageAsDataUrl(brand.logos.light)
+    if (logoImg.dataUrl) {
+      try {
+        const lh = 18, lw = lh * (logoImg.width / logoImg.height)
+        doc.addImage(logoImg.dataUrl, 'PNG', mg, y, lw, lh, undefined, 'FAST')
+      } catch {}
+    }
+
+    // Title
+    doc.setFontSize(28); doc.setFont('helvetica', 'bold')
+    doc.setTextColor(sr[0], sr[1], sr[2])
+    doc.text('FACTURA', pw - mg, y + 6, { align: 'right' })
+    doc.setFontSize(12); doc.setTextColor(100, 100, 100); doc.setFont('helvetica', 'normal')
+    doc.text(invoice.invoiceNumber, pw - mg, y + 14, { align: 'right' })
+
+    // Barcode
+    const bc = invoice.invoiceNumber.replace(/-/g, '')
+    const bcUrl = generateBarcodeDataUrl(bc)
+    if (bcUrl) {
+      try { doc.addImage(bcUrl, 'PNG', pw - mg - 55, y + 17, 55, 12, undefined, 'FAST') } catch {}
+      doc.setFontSize(7); doc.setTextColor(120, 120, 120)
+      doc.text(bc, pw - mg - 27.5, y + 32, { align: 'center' })
+    }
+
+    y += 20
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100)
+    doc.text('EMPRESA DE SERVICIOS Y SUMINISTROS DE MATERIALES DE LA CONSTRUCCION SERVISUMIC S.U.R.L.', mg, y)
+    y += 3.5; doc.text('NIT: 50004199243', mg, y)
+    y += 3.5; doc.text('Carretera a Berroa Km 1.5 al lado del Frigor\u00EDfico  |  facturacion@servisumic.com  |  +5363707599', mg, y)
+    y += 14
+
+    // Orange bar
+    doc.setFillColor(pr[0], pr[1], pr[2]); doc.rect(mg, y, cw, 2, 'F'); y += 10
+
+    // Client + Invoice info
+    const ly = y, rx = pw / 2 + 10
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(pr[0], pr[1], pr[2])
+    doc.text('CLIENTE', mg, y); y += 6
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(40, 40, 40)
+    doc.text(invoice.customer.businessName, mg, y); y += 5
+    if (invoice.customer.code) { doc.setFontSize(9); doc.setTextColor(100,100,100); doc.text(`Código: ${invoice.customer.code}`, mg, y); y += 5 }
+    if (invoice.customer.taxId) { doc.setFontSize(9); doc.setTextColor(100,100,100); doc.text(`NIT: ${invoice.customer.taxId}`, mg, y); y += 5 }
+    if (invoice.customer.address) { doc.setFontSize(9); doc.setTextColor(100,100,100); const al = doc.splitTextToSize(invoice.customer.address, cw/2-10); doc.text(al, mg, y); y += al.length * 4 + 1 }
+
+    let ry = ly
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(pr[0], pr[1], pr[2])
+    doc.text('DETALLES', rx, ry); ry += 6
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40,40,40)
+    doc.text(`Fecha: ${new Date(invoice.createdAt).toLocaleDateString('es-ES')}`, rx, ry); ry += 5
+    if (invoice.dueDate) { doc.text(`Vencimiento: ${new Date(invoice.dueDate).toLocaleDateString('es-ES')}`, rx, ry); ry += 5 }
+    doc.text(`Estado: ${invoice.paymentStatus === 'paid' ? 'Pagada' : invoice.paymentStatus === 'partial' ? 'Pago Parcial' : 'Pendiente'}`, rx, ry); ry += 5
+    if (mode === 'cup') { doc.text(`Tasa: 1 USD = ${cupRate} CUP`, rx, ry); ry += 5 }
+
+    y = Math.max(y, ry) + 12
+
+    // Table header
+    doc.setFillColor(sr[0], sr[1], sr[2]); doc.rect(mg, y - 6, cw, 10, 'F')
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255, 255, 255)
+    doc.text('#', mg + 2, y); doc.text('PRODUCTO', mg + 10, y)
+    if (mode === 'cup') {
+      doc.text('CANT.', mg + 100, y, { align: 'center' })
+      doc.text('P.UNIT CUP', mg + 140, y, { align: 'right' })
+      doc.text('SUBTOTAL CUP', pw - mg - 4, y, { align: 'right' })
+    } else {
+      doc.text('CANT.', mg + 100, y, { align: 'center' })
+      doc.text('P.UNIT USD', mg + 140, y, { align: 'right' })
+      doc.text('SUBTOTAL USD', pw - mg - 4, y, { align: 'right' })
+    }
+    y += 8
+
+    // Table rows
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
+    for (let i = 0; i < invoice.lines.length; i++) {
+      if (y > ph - 60) { doc.addPage(); y = 25 }
+      const line = invoice.lines[i]
+      if (i % 2 === 0) { doc.setFillColor(248, 248, 248); doc.rect(mg, y - 4, cw, 7, 'F') }
+      doc.setTextColor(40, 40, 40)
+      const name = line.productName.length > 40 ? line.productName.substring(0, 40) + '...' : line.productName
+      doc.text(String(i + 1), mg + 2, y)
+      doc.text(name, mg + 10, y)
+      doc.text(String(line.quantity), mg + 100, y, { align: 'center' })
+      if (mode === 'cup') {
+        doc.text(Math.round(line.unitPrice * cupRate).toLocaleString('es-ES'), mg + 140, y, { align: 'right' })
+        doc.text(Math.round(line.subtotal * cupRate).toLocaleString('es-ES'), pw - mg - 4, y, { align: 'right' })
+      } else {
+        doc.text(fmtUSD(line.unitPrice), mg + 140, y, { align: 'right' })
+        doc.text(fmtUSD(line.subtotal), pw - mg - 4, y, { align: 'right' })
+      }
+      y += 7
+    }
+
+    // Totals
+    y += 5; doc.setDrawColor(200, 200, 200); doc.line(mg + 100, y, pw - mg, y); y += 8
+    doc.setFontSize(10)
+    const sub = mode === 'cup' ? Math.round(invoice.subtotal * cupRate).toLocaleString('es-ES') + ' CUP' : fmtUSD(invoice.subtotal)
+    doc.setTextColor(40, 40, 40); doc.setFont('helvetica', 'normal')
+    doc.text('Subtotal:', mg + 120, y); doc.text(sub, pw - mg - 4, y, { align: 'right' }); y += 6
+
+    if (invoice.discountAmount > 0 && invoice.discountPercent <= 100) {
+      const disc = mode === 'cup' ? '-' + Math.round(invoice.discountAmount * cupRate).toLocaleString('es-ES') + ' CUP' : '-' + fmtUSD(invoice.discountAmount)
+      doc.setTextColor(0, 150, 0)
+      doc.text(`Descuento (${invoice.discountPercent}%):`, mg + 100, y); doc.text(disc, pw - mg - 4, y, { align: 'right' }); y += 6
+    }
+
+    y += 2
+    doc.setFillColor(pr[0], pr[1], pr[2]); doc.rect(mg + 90, y - 5, cw - 90, 12, 'F')
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(255, 255, 255)
+    const total = mode === 'cup' ? Math.round(invoice.totalAmount * cupRate).toLocaleString('es-ES') + ' CUP' : fmtUSD(invoice.totalAmount)
+    doc.text('TOTAL:', mg + 95, y + 2); doc.text(total, pw - mg - 8, y + 2, { align: 'right' })
+    y += 16
+
+    // Payment info
+    if (invoice.amountPaid > 0) {
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40)
+      const paid = mode === 'cup' ? Math.round(invoice.amountPaid * cupRate).toLocaleString('es-ES') + ' CUP' : fmtUSD(invoice.amountPaid)
+      const due = mode === 'cup' ? Math.round(invoice.amountDue * cupRate).toLocaleString('es-ES') + ' CUP' : fmtUSD(invoice.amountDue)
+      doc.text(`Pagado: ${paid}`, mg + 120, y); y += 5
+      doc.text(`Pendiente: ${due}`, mg + 120, y); y += 10
+    }
+
+    // Footer
+    y = Math.max(y, ph - 40)
+    doc.setDrawColor(200, 200, 200); doc.line(mg, y, pw - mg, y); y += 6
+    doc.setFontSize(7); doc.setTextColor(100, 100, 100); doc.setFont('helvetica', 'normal')
+    doc.text('Empresa de Servicios y Suministros MPM SERVISUMIC S.U.R.L. a la Cuenta No: 0533445000023216', mg, y); y += 3.5
+    doc.text('NIT: 50004199243', mg, y); y += 5
+    doc.text('\u2706 Carretera a Berroa Km 1.5 al lado del Frigorífico    \u2709 facturacion@servisumic.com    \u260E +5363707599', mg, y)
+
+    doc.save(`${invoice.invoiceNumber}-${mode}.pdf`)
+  }
+
   useEffect(() => {
     fetchInvoice()
   }, [invoiceId])
@@ -552,6 +727,34 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                 >
                   <Printer className="w-4 h-4" />
                   <span className="font-medium text-sm hidden sm:inline">Imprimir</span>
+                </motion.button>
+
+                {/* PDF Download buttons */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => downloadInvoicePdf('usd')}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
+                    theme === 'dark' ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                  title="Descargar PDF en USD"
+                >
+                  <FileDown className="w-4 h-4" />
+                  <span className="font-medium text-sm hidden sm:inline">PDF USD</span>
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => downloadInvoicePdf('cup')}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-2 rounded-xl transition-colors',
+                    theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/50' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                  )}
+                  title="Descargar PDF en CUP"
+                >
+                  <FileDown className="w-4 h-4" />
+                  <span className="font-medium text-sm hidden sm:inline">PDF CUP</span>
                 </motion.button>
 
                 {/* Confirm Button - show when no deliveries exist (allow re-confirmation even if status is 'delivered' with missing delivery records) */}
