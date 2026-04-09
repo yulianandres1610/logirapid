@@ -409,11 +409,15 @@ export async function POST(
       } else {
         // Fallback: find central warehouse or any active warehouse
         const centralResult = await db.query(
-          'SELECT id FROM market_warehouses WHERE company_id = $1 AND is_active = true ORDER BY is_central DESC NULLS LAST LIMIT 1',
+          'SELECT id, name FROM market_warehouses WHERE company_id = $1 AND is_active = true ORDER BY is_central DESC NULLS LAST LIMIT 1',
           [payload.companyId]
         )
         if (centralResult.rows.length > 0) {
           warehouseIds.add(centralResult.rows[0].id)
+          // Update invoice with resolved warehouse
+          await db.query('UPDATE market_invoices SET warehouse_id = $1 WHERE id = $2', [centralResult.rows[0].id, invoiceId])
+          invoice.warehouse_id = centralResult.rows[0].id
+          invoice.warehouse_name = centralResult.rows[0].name || 'Almacén Central'
         } else {
           return NextResponse.json({ success: false, error: 'No hay almacén disponible para confirmar' }, { status: 400 })
         }
@@ -445,12 +449,22 @@ export async function POST(
           }
         }
       } else {
-        const sr = await db.query(`
-          SELECT COALESCE(quantity_on_hand, 0) as on_hand, COALESCE(quantity_reserved, 0) as reserved
+        // Check stock in specific warehouse first, then total across all warehouses
+        let sr = await db.query(`
+          SELECT COALESCE(SUM(quantity_on_hand), 0) as on_hand, COALESCE(SUM(quantity_reserved), 0) as reserved
           FROM market_warehouse_stock WHERE warehouse_id = $1 AND product_id = $2
-          ${line.variant_id ? 'AND variant_id = $3' : 'AND variant_id IS NULL'}
-        `, line.variant_id ? [invoice.warehouse_id, line.product_id, line.variant_id] : [invoice.warehouse_id, line.product_id])
-        const available = (parseFloat(sr.rows[0]?.on_hand) || 0) - (parseFloat(sr.rows[0]?.reserved) || 0)
+        `, [invoice.warehouse_id, line.product_id])
+        let available = (parseFloat(sr.rows[0]?.on_hand) || 0) - (parseFloat(sr.rows[0]?.reserved) || 0)
+
+        // If no stock in specific warehouse, check total stock (product might be in another warehouse)
+        if (available <= 0) {
+          sr = await db.query(`
+            SELECT COALESCE(SUM(quantity_on_hand), 0) as on_hand, COALESCE(SUM(quantity_reserved), 0) as reserved
+            FROM market_warehouse_stock WHERE product_id = $1
+          `, [line.product_id])
+          available = (parseFloat(sr.rows[0]?.on_hand) || 0) - (parseFloat(sr.rows[0]?.reserved) || 0)
+        }
+
         const required = parseFloat(line.quantity)
         if (available < required) {
           insufficientStock.push({ product: line.product_name, warehouseName: invoice.warehouse_name || 'Almacén', required, available })
