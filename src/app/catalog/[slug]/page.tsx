@@ -278,7 +278,7 @@ export default function CatalogPage() {
               {topSellers.map(product => (
                 <div key={`top-${product.id}`}
                   onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
-                  className="w-36 shrink-0 sm:w-44 bg-white rounded-xl border border-gray-100 overflow-hidden cursor-pointer shadow-sm">
+                  className="w-36 shrink-0 sm:w-48 lg:w-52 bg-white rounded-xl border border-gray-100 overflow-hidden cursor-pointer shadow-sm hover:shadow-md transition-shadow">
                   <div className="aspect-square bg-gray-50 relative overflow-hidden">
                     {product.imageUrl ? (
                       <LazyImage src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover" />
@@ -289,13 +289,13 @@ export default function CatalogPage() {
                       <Flame className="w-2.5 h-2.5" /> Popular
                     </div>
                   </div>
-                  <div className="p-2">
-                    <p className="font-medium text-gray-900 text-xs line-clamp-1">{product.name}</p>
+                  <div className="p-2 sm:p-2.5">
+                    <p className="font-medium text-gray-900 text-xs sm:text-sm line-clamp-1">{product.name}</p>
                     {product.priceCUP !== null && (
-                      <p className="text-sm font-bold mt-0.5" style={{ color: primaryColor }}>{product.priceCUP.toLocaleString('es-ES')} <span className="text-[9px] font-normal">CUP</span></p>
+                      <p className="text-sm sm:text-base font-bold mt-0.5" style={{ color: primaryColor }}>{product.priceCUP.toLocaleString('es-ES')} <span className="text-[9px] sm:text-xs font-normal">CUP</span></p>
                     )}
                     {product.priceUSD !== null && (
-                      <p className="text-[10px] text-gray-400">${product.priceUSD.toFixed(2)}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400">${product.priceUSD.toFixed(2)}</p>
                     )}
                   </div>
                 </div>
@@ -322,7 +322,7 @@ export default function CatalogPage() {
               {paintProducts.map(product => (
                 <div key={`paint-${product.id}`}
                   onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
-                  className="w-36 shrink-0 sm:w-44 bg-white rounded-xl border border-gray-100 overflow-hidden cursor-pointer shadow-sm">
+                  className="w-36 shrink-0 sm:w-48 lg:w-52 bg-white rounded-xl border border-gray-100 overflow-hidden cursor-pointer shadow-sm hover:shadow-md transition-shadow">
                   <div className="aspect-square bg-gray-50 relative overflow-hidden">
                     {product.imageUrl ? (
                       <LazyImage src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover" />
@@ -331,13 +331,13 @@ export default function CatalogPage() {
                     )}
                     <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold text-white bg-blue-600">🎨 Pintura</div>
                   </div>
-                  <div className="p-2">
-                    <p className="font-medium text-gray-900 text-xs line-clamp-1">{product.name}</p>
+                  <div className="p-2 sm:p-2.5">
+                    <p className="font-medium text-gray-900 text-xs sm:text-sm line-clamp-1">{product.name}</p>
                     {product.priceCUP !== null && (
-                      <p className="text-sm font-bold mt-0.5" style={{ color: primaryColor }}>{product.priceCUP.toLocaleString('es-ES')} <span className="text-[9px] font-normal">CUP</span></p>
+                      <p className="text-sm sm:text-base font-bold mt-0.5" style={{ color: primaryColor }}>{product.priceCUP.toLocaleString('es-ES')} <span className="text-[9px] sm:text-xs font-normal">CUP</span></p>
                     )}
                     {product.priceUSD !== null && (
-                      <p className="text-[10px] text-gray-400">${product.priceUSD.toFixed(2)}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400">${product.priceUSD.toFixed(2)}</p>
                     )}
                   </div>
                 </div>

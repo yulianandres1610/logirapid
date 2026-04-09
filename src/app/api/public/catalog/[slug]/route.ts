@@ -147,7 +147,7 @@ export async function GET(
         FROM pos_sales p
         FULL OUTER JOIN wholesale_sales w ON p.product_id = w.product_id
         ORDER BY qty_sold DESC
-        LIMIT 6
+        LIMIT 36
       `, [companyId])
       topSellingIds = topResult.rows.map((r: any) => parseInt(r.product_id))
     } catch (e) {
@@ -161,7 +161,7 @@ export async function GET(
           SELECT id FROM market_products
           WHERE company_id = $1 AND is_active = true AND quantity_on_hand > 0
           ORDER BY quantity_on_hand DESC
-          LIMIT 6
+          LIMIT 36
         `, [companyId])
         topSellingIds = fallbackResult.rows.map((r: any) => parseInt(r.id))
       } catch {}
