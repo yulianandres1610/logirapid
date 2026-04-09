@@ -134,21 +134,56 @@ export async function GET(
       signerName: row.signer_name || null,
       cancellationReason: row.cancellation_reason || null,
       cancelledAt: row.cancelled_at || null,
-      lines: linesResult.rows.map(line => ({
-        id: line.id,
-        productId: line.product_id,
-        variantId: line.variant_id,
-        productName: line.product_name,
-        productSku: line.product_sku,
-        productImage: line.product_image,
-        quantity: parseFloat(line.quantity) || 0,
-        unitPrice: parseFloat(line.unit_price) || 0,
-        originalPrice: parseFloat(line.original_price) || 0,
-        discountPercent: parseFloat(line.discount_percent) || 0,
-        discountAmount: parseFloat(line.discount_amount) || 0,
-        subtotal: parseFloat(line.subtotal) || 0,
-        notes: line.notes,
-        estimatedDelivery: line.estimated_delivery || null
+      lines: await Promise.all(linesResult.rows.map(async (line) => {
+        const qty = parseFloat(line.quantity) || 0
+        const productId = line.product_id
+
+        // Recalculate delivery estimate dynamically based on current stock
+        let estimatedDelivery = line.estimated_delivery || null
+        try {
+          // Check stock across all warehouses (or specific warehouse if set)
+          const stockQuery = row.warehouse_id
+            ? `SELECT COALESCE(SUM(quantity_on_hand), 0) as stock FROM market_warehouse_stock WHERE product_id = $1 AND warehouse_id = $2`
+            : `SELECT COALESCE(SUM(quantity_on_hand), 0) as stock FROM market_warehouse_stock WHERE product_id = $1`
+          const stockParams = row.warehouse_id ? [productId, row.warehouse_id] : [productId]
+          const stockRes = await db.query(stockQuery, stockParams)
+          const stockOnHand = parseFloat(stockRes.rows[0]?.stock) || 0
+
+          if (stockOnHand >= qty) {
+            estimatedDelivery = '1-24h'
+          } else if (stockOnHand > 0 && stockOnHand < qty) {
+            // Partial stock - check if can manufacture the deficit
+            const formulaRes = await db.query(
+              `SELECT id FROM market_production_formulas WHERE target_product_id = $1 AND company_id = $2 AND is_active = true LIMIT 1`,
+              [productId, payload.companyId]
+            )
+            estimatedDelivery = formulaRes.rows.length > 0 ? '1-3d' : '1-30d'
+          } else {
+            // No stock at all
+            const formulaRes = await db.query(
+              `SELECT id FROM market_production_formulas WHERE target_product_id = $1 AND company_id = $2 AND is_active = true LIMIT 1`,
+              [productId, payload.companyId]
+            )
+            estimatedDelivery = formulaRes.rows.length > 0 ? '1-3d' : '1-30d'
+          }
+        } catch { /* keep original estimate */ }
+
+        return {
+          id: line.id,
+          productId,
+          variantId: line.variant_id,
+          productName: line.product_name,
+          productSku: line.product_sku,
+          productImage: line.product_image,
+          quantity: qty,
+          unitPrice: parseFloat(line.unit_price) || 0,
+          originalPrice: parseFloat(line.original_price) || 0,
+          discountPercent: parseFloat(line.discount_percent) || 0,
+          discountAmount: parseFloat(line.discount_amount) || 0,
+          subtotal: parseFloat(line.subtotal) || 0,
+          notes: line.notes,
+          estimatedDelivery
+        }
       }))
     }
 

@@ -106,13 +106,20 @@ export async function POST(
       effectiveDueDate = date.toISOString().split('T')[0]
     }
 
+    // Ensure required columns exist
+    try {
+      await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS sales_rep_id INTEGER`)
+      await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS amount_paid DECIMAL(15,4) DEFAULT 0`)
+      await db.query(`ALTER TABLE market_invoices ADD COLUMN IF NOT EXISTS wholesale_exchange_rate DECIMAL(10,2)`)
+    } catch { /* ignore */ }
+
     const result = await db.transaction(async (client) => {
       // Create invoice
       const invoiceResult = await client.query(`
         INSERT INTO market_invoices (
           company_id, invoice_number, customer_id, quote_id, pricelist_id, warehouse_id,
           status, payment_status, subtotal, discount_percent, discount_amount, total_amount,
-          amount_due, currency, due_date, notes, internal_notes, created_by, sales_rep_id
+          amount_paid, amount_due, currency, due_date, notes, internal_notes, created_by
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
         RETURNING id
       `, [
@@ -125,16 +132,16 @@ export async function POST(
         'draft',
         'pending',
         quote.subtotal,
-        quote.discount_percent,
-        quote.discount_amount,
+        quote.discount_percent || 0,
+        quote.discount_amount || 0,
         quote.total_amount,
+        0, // amount_paid = 0
         quote.total_amount, // amount_due = total at creation
-        quote.currency,
+        quote.currency || 'USD',
         effectiveDueDate || null,
         quote.notes,
         quote.internal_notes,
-        payload.userId,
-        quote.sales_rep_id || null
+        payload.userId
       ])
 
       const invoiceId = invoiceResult.rows[0].id
