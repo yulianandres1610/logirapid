@@ -648,9 +648,9 @@ export default function CreateProductPage() {
   const handlePhoneUploadComplete = async (fileUrl: string) => {
     setShowPhoneUpload(false)
     try {
-      // fileUrl is the Supabase storage path in 'company-private-documents' bucket
+      // fileUrl is the Supabase storage path in 'company-documents' bucket
       const response = await fetch(
-        `/api/upload/image?path=${encodeURIComponent(fileUrl)}&bucket=company-private-documents`
+        `/api/upload/image?path=${encodeURIComponent(fileUrl)}&bucket=company-documents`
       )
       if (response.ok) {
         const data = await response.json()
