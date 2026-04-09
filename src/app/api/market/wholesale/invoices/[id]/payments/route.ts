@@ -163,9 +163,12 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Ensure currency column exists
+    // Ensure all columns exist
     try {
       await db.query(`ALTER TABLE market_invoice_payments ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'USD'`)
+      await db.query(`ALTER TABLE market_invoice_payments ADD COLUMN IF NOT EXISTS payment_date DATE DEFAULT CURRENT_DATE`)
+      await db.query(`ALTER TABLE market_invoice_payments ADD COLUMN IF NOT EXISTS notes TEXT`)
+      await db.query(`ALTER TABLE market_invoice_payments ADD COLUMN IF NOT EXISTS created_by INTEGER`)
     } catch { /* ignore */ }
 
     const amountDue = parseFloat(invoice.amount_due) || 0
@@ -223,27 +226,35 @@ export async function POST(
       ])
 
       // Update invoice amounts
-      const newAmountPaid = parseFloat(invoice.amount_paid) + effectiveAmount
-      const newAmountDue = parseFloat(invoice.total_amount) - newAmountPaid
-      const newPaymentStatus = newAmountDue <= 0 ? 'paid' : 'partial'
+      const currentPaid = parseFloat(invoice.amount_paid) || 0
+      const totalAmount = parseFloat(invoice.total_amount) || 0
+      const newAmountPaid = Number((currentPaid + effectiveAmount).toFixed(4))
+      const newAmountDue = Number(Math.max(0, totalAmount - newAmountPaid).toFixed(4))
+      const newPaymentStatus = newAmountDue <= 0.01 ? 'paid' : 'partial'
+
+      console.log('[Payment] Updating invoice:', { invoiceId, currentPaid, effectiveAmount, newAmountPaid, newAmountDue, newPaymentStatus })
 
       await client.query(`
         UPDATE market_invoices SET
           amount_paid = $1,
           amount_due = $2,
           payment_status = $3,
-          paid_at = CASE WHEN $3 = 'paid' THEN NOW() ELSE paid_at END,
+          paid_at = CASE WHEN $3::text = 'paid' THEN NOW() ELSE paid_at END,
           updated_at = NOW()
         WHERE id = $4
       `, [newAmountPaid, newAmountDue, newPaymentStatus, invoiceId])
 
-      // Update customer balance
-      await client.query(`
-        UPDATE market_wholesale_customers SET
-          current_balance = current_balance - $1,
-          updated_at = NOW()
-        WHERE id = $2
-      `, [effectiveAmount, invoice.customer_id])
+      // Update customer balance (ignore if column doesn't exist)
+      try {
+        await client.query(`
+          UPDATE market_wholesale_customers SET
+            current_balance = COALESCE(current_balance, 0) - $1,
+            updated_at = NOW()
+          WHERE id = $2
+        `, [effectiveAmount, invoice.customer_id])
+      } catch (balErr) {
+        console.log('[Payment] Customer balance update skipped:', balErr instanceof Error ? balErr.message : balErr)
+      }
     })
 
     return NextResponse.json({
