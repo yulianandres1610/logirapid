@@ -200,26 +200,25 @@ export async function POST(
     const paymentNumber = `PAG-${year}-${String(nextNumber).padStart(4, '0')}`
 
     await db.transaction(async (client) => {
-      // Create payment - store in USD (converted) and note original currency
+      // Build notes with original currency info
       const paymentNotes = [
         notes,
         currency && currency !== 'USD' && originalAmount ? `Original: ${originalAmount} ${currency}` : null
-      ].filter(Boolean).join(' | ')
+      ].filter(Boolean).join(' | ') || null
 
       await client.query(`
         INSERT INTO market_invoice_payments (
-          invoice_id, payment_number, amount, currency, payment_method,
+          invoice_id, payment_number, amount, payment_method,
           reference, payment_date, notes, created_by
-        ) VALUES ($1, $2, $3::numeric, $4::text, $5, $6, $7, $8, $9)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       `, [
         invoiceId,
         paymentNumber,
         Number(effectiveAmount.toFixed(4)),
-        String(currency || 'USD'),
         paymentMethod,
         reference || null,
         paymentDate || new Date().toISOString().split('T')[0],
-        paymentNotes || null,
+        paymentNotes,
         payload.userId
       ])
 

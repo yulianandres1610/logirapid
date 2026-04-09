@@ -23,9 +23,12 @@ export async function GET() {
       WHERE id = 15
     `)
 
+    // Also fix invoice 19: reset quantity_delivered to 0 (was set prematurely on confirm)
+    await db.query('UPDATE market_invoice_lines SET quantity_delivered = 0 WHERE invoice_id = 19')
+
     return NextResponse.json({
       success: true,
-      message: `${invoices.rows.length} facturas eliminadas, cotización 15 reseteada a accepted`
+      message: `${invoices.rows.length} facturas eliminadas, cotización 15 reseteada, factura 19 quantity_delivered reseteado`
     })
   } catch (error) {
     return NextResponse.json({ success: false, error: String(error) }, { status: 500 })

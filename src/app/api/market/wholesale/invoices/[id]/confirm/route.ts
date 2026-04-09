@@ -625,16 +625,9 @@ export async function POST(
         })
       }
 
-      // Update invoice lines quantity_delivered
-      for (const line of linesResult.rows) {
-        const qty = isMultiWarehouse
-          ? Object.values(parseWQ(line.warehouse_quantities)).reduce((s, v) => s + (v > 0 ? v : 0), 0)
-          : parseFloat(line.quantity)
-        await client.query(`
-          UPDATE market_invoice_lines SET quantity_delivered = COALESCE(quantity_delivered, 0) + $1
-          WHERE id = $2
-        `, [qty, line.id])
-      }
+      // NOTE: Do NOT update quantity_delivered here.
+      // quantity_delivered is updated when the delivery is dispatched/completed,
+      // not when the invoice is confirmed. The delivery is still pending at this point.
 
       // Update invoice status to confirmed (pending delivery from warehouse)
       await client.query(`
