@@ -384,18 +384,27 @@ export async function POST(
       WHERE il.invoice_id = $1
     `, [invoiceId])
 
+    // Parse warehouse_quantities (may be string or object from DB)
+    const parseWQ = (wq: any): WarehouseQuantities => {
+      if (!wq) return {}
+      if (typeof wq === 'string') { try { return JSON.parse(wq) } catch { return {} } }
+      if (typeof wq === 'object') return wq as WarehouseQuantities
+      return {}
+    }
+
     // Determine warehouse mode
     const isMultiWarehouse = linesResult.rows.some(line => {
-      const wq = line.warehouse_quantities
-      if (!wq || typeof wq !== 'object') return false
-      return Object.keys(wq).length > 0 && Object.values(wq as WarehouseQuantities).some(q => q > 0)
+      const wq = parseWQ(line.warehouse_quantities)
+      return Object.keys(wq).length > 0 && Object.values(wq).some(q => q > 0)
     })
+
+    console.log('[Confirm] isMultiWarehouse:', isMultiWarehouse, 'invoice.warehouse_id:', invoice.warehouse_id)
 
     // Collect warehouse IDs
     const warehouseIds = new Set<number>()
     if (isMultiWarehouse) {
       for (const line of linesResult.rows) {
-        const wq = line.warehouse_quantities as WarehouseQuantities || {}
+        const wq = parseWQ(line.warehouse_quantities)
         for (const [wId, qty] of Object.entries(wq)) {
           if (qty > 0) warehouseIds.add(parseInt(wId))
         }
@@ -434,7 +443,7 @@ export async function POST(
 
     for (const line of linesResult.rows) {
       if (isMultiWarehouse) {
-        const wq = line.warehouse_quantities as WarehouseQuantities || {}
+        const wq = parseWQ(line.warehouse_quantities)
         for (const [wIdStr, qty] of Object.entries(wq)) {
           if (qty <= 0) continue
           const wId = parseInt(wIdStr)
@@ -496,7 +505,7 @@ export async function POST(
         }>>()
 
         for (const line of linesResult.rows) {
-          const wq = line.warehouse_quantities as WarehouseQuantities || {}
+          const wq = parseWQ(line.warehouse_quantities)
           for (const [wIdStr, qty] of Object.entries(wq)) {
             if (qty <= 0) continue
             const wId = parseInt(wIdStr)
@@ -619,7 +628,7 @@ export async function POST(
       // Update invoice lines quantity_delivered
       for (const line of linesResult.rows) {
         const qty = isMultiWarehouse
-          ? Object.values(line.warehouse_quantities as WarehouseQuantities || {}).reduce((s, v) => s + (v > 0 ? v : 0), 0)
+          ? Object.values(parseWQ(line.warehouse_quantities)).reduce((s, v) => s + (v > 0 ? v : 0), 0)
           : parseFloat(line.quantity)
         await client.query(`
           UPDATE market_invoice_lines SET quantity_delivered = COALESCE(quantity_delivered, 0) + $1
@@ -649,7 +658,7 @@ export async function POST(
         try {
           await client.query('SAVEPOINT sp_cleanup_reservations')
           if (isMultiWarehouse) {
-            const wq = line.warehouse_quantities as WarehouseQuantities || {}
+            const wq = parseWQ(line.warehouse_quantities)
             for (const [wIdStr] of Object.entries(wq)) {
               await client.query(`
                 UPDATE market_warehouse_stock SET quantity_reserved = 0, updated_at = NOW()

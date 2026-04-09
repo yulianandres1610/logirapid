@@ -328,20 +328,29 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const handleConfirm = async () => {
-    if (!confirm('¿Confirmar esta factura y crear entrega?')) return
-
     setConfirming(true)
     try {
       const response = await fetch(`/api/market/wholesale/invoices/${invoiceId}/confirm`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
       })
       const result = await response.json()
       if (!response.ok) {
-        alert(result.error || 'Error al confirmar factura')
+        const stockErrors = result.data?.insufficientStock
+        if (stockErrors && stockErrors.length > 0) {
+          const details = stockErrors.map((s: any) => `• ${s.product}: necesita ${s.required}, disponible ${s.available} (${s.warehouseName})`).join('\n')
+          alert(`Stock insuficiente:\n\n${details}`)
+        } else {
+          alert(result.error || 'Error al confirmar factura')
+        }
+      } else {
+        alert(result.message || 'Factura confirmada y entrega creada')
       }
       fetchInvoice()
     } catch (error) {
       console.error('Error confirming invoice:', error)
+      alert('Error de conexión al confirmar')
     } finally {
       setConfirming(false)
     }
