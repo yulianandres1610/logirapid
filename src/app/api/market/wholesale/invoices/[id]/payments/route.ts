@@ -163,14 +163,20 @@ export async function POST(
       }, { status: 400 })
     }
 
+    // Ensure currency column exists
+    try {
+      await db.query(`ALTER TABLE market_invoice_payments ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'USD'`)
+    } catch { /* ignore */ }
+
     const amountDue = parseFloat(invoice.amount_due) || 0
+    const safeAmount = parseFloat(String(amount)) || 0
     // Allow 5% tolerance for exchange rate rounding
     const tolerance = amountDue * 0.05
-    const effectiveAmount = Math.min(amount, amountDue)
-    if (amount > amountDue + tolerance) {
+    const effectiveAmount = Math.min(safeAmount, amountDue)
+    if (safeAmount > amountDue + tolerance) {
       return NextResponse.json({
         success: false,
-        error: `El monto del pago ($${amount.toFixed(2)}) excede el saldo pendiente ($${amountDue.toFixed(2)})`
+        error: `El monto del pago ($${safeAmount.toFixed(2)}) excede el saldo pendiente ($${amountDue.toFixed(2)})`
       }, { status: 400 })
     }
 
@@ -204,12 +210,12 @@ export async function POST(
         INSERT INTO market_invoice_payments (
           invoice_id, payment_number, amount, currency, payment_method,
           reference, payment_date, notes, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ) VALUES ($1, $2, $3::numeric, $4::text, $5, $6, $7, $8, $9)
       `, [
         invoiceId,
         paymentNumber,
-        effectiveAmount,
-        currency || 'USD',
+        Number(effectiveAmount.toFixed(4)),
+        String(currency || 'USD'),
         paymentMethod,
         reference || null,
         paymentDate || new Date().toISOString().split('T')[0],
