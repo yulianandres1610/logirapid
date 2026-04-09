@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Package, ShoppingCart, MessageCircle, Phone, MapPin, Star, Loader2, Minus, Plus, Share2, Truck, Shield, Clock, ThumbsUp, User } from 'lucide-react'
+import { ArrowLeft, Package, ShoppingCart, MessageCircle, Phone, MapPin, Star, Loader2, Minus, Plus, Share2, Truck, Shield, Clock, ThumbsUp, User, Check } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import JsBarcode from 'jsbarcode'
 
@@ -103,9 +103,6 @@ export default function ProductDetailPage() {
   const handleAddToCart = () => {
     setAddedToCart(true)
     setTimeout(() => setAddedToCart(false), 2000)
-    // The cart state lives in the catalog page - this is visual feedback only
-    // In a real implementation, this would use a global cart context
-    openWhatsApp()
   }
 
   const share = () => {
@@ -222,7 +219,7 @@ export default function ProductDetailPage() {
               <div className="flex items-center gap-2">
                 <div className={`w-2.5 h-2.5 rounded-full ${product.stock > 10 ? 'bg-green-500' : product.stock > 0 ? 'bg-amber-500' : 'bg-red-500'}`} />
                 <span className="text-sm text-gray-600">
-                  {product.stock > 0 ? `${product.stock} ${product.unit} disponibles` : 'Agotado'}
+                  {product.stock > 0 ? `En stock · ${product.stock} ${product.unit}` : 'Agotado'}
                 </span>
               </div>
             )}
@@ -238,7 +235,8 @@ export default function ProductDetailPage() {
                   </button>
                   <span className="text-xl font-bold w-12 text-center">{quantity}</span>
                   <button onClick={() => setQuantity(q => Math.min(product.stock || 999, q + 1))}
-                    className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
+                    disabled={quantity >= (product.stock || 999)}
+                    className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors disabled:opacity-30">
                     <Plus className="w-4 h-4" />
                   </button>
                   {product.priceCUP && quantity > 1 && (
@@ -251,24 +249,33 @@ export default function ProductDetailPage() {
             )}
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-2">
+            <div className="flex flex-col gap-2.5 pt-2">
               {isAvailable && (
                 <button onClick={handleAddToCart}
-                  className={`flex-1 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all ${addedToCart ? 'bg-green-500 text-white' : 'text-white'}`}
+                  className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all ${addedToCart ? 'bg-green-500 text-white' : 'text-white'}`}
                   style={!addedToCart ? { backgroundColor: primaryColor } : {}}>
                   {addedToCart ? (
-                    <><ThumbsUp className="w-5 h-5" /> Consulta enviada</>
+                    <><Check className="w-5 h-5" /> Agregado al carrito</>
                   ) : (
-                    <><MessageCircle className="w-5 h-5" /> Consultar disponibilidad</>
+                    <><ShoppingCart className="w-5 h-5" /> Agregar al carrito</>
                   )}
                 </button>
               )}
-              {store?.phone && (
-                <a href={`tel:${store.phone}`}
-                  className="py-4 px-5 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
-                  <Phone className="w-5 h-5 text-gray-600" />
-                </a>
-              )}
+              <div className="flex gap-2.5">
+                {store?.whatsapp && (
+                  <button onClick={openWhatsApp}
+                    className="flex-1 py-3.5 rounded-xl font-semibold text-base flex items-center justify-center gap-2 text-white"
+                    style={{ backgroundColor: '#25D366' }}>
+                    <MessageCircle className="w-5 h-5" /> Me interesa
+                  </button>
+                )}
+                {store?.phone && (
+                  <a href={`tel:${store.phone}`}
+                    className="py-3.5 px-5 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
+                    <Phone className="w-5 h-5 text-gray-600" />
+                  </a>
+                )}
+              </div>
             </div>
 
             {/* Trust badges */}

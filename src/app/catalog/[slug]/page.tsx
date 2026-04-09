@@ -379,49 +379,120 @@ export default function CatalogPage() {
           </div>
         ) : (
           <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2.5 sm:gap-4">
+          {/* Mobile: 1 product per row (horizontal card) */}
+          <div className="sm:hidden flex flex-col gap-3">
             {products.map((product) => {
               const inCart = cart.find(c => c.product.id === product.id)
+              const maxQty = product.stock || 999
+              return (
+                <div key={product.id}
+                  className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm flex">
+                  <div onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
+                    className="w-28 h-28 shrink-0 bg-gray-50 relative overflow-hidden cursor-pointer">
+                    {product.imageUrl ? (
+                      <LazyImage src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center"><Package className="w-6 h-6 text-gray-200" /></div>
+                    )}
+                    {product.isTopSeller && (
+                      <span className="absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: primaryColor }}>
+                        <Flame className="w-2.5 h-2.5 text-white" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 p-2.5 flex flex-col justify-between min-w-0">
+                    <div>
+                      <p onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
+                        className="font-semibold text-gray-900 text-xs line-clamp-2 leading-tight cursor-pointer">{product.name}</p>
+                      <div className="flex items-center gap-0.5 mt-1">
+                        {[1,2,3,4,5].map(s => (
+                          <Star key={s} className="w-3 h-3" fill={s <= 4 ? '#f59e0b' : 'none'} stroke={s <= 4 ? '#f59e0b' : '#d1d5db'} />
+                        ))}
+                        <span className="text-[9px] text-gray-400 ml-1">4.0</span>
+                      </div>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        {product.priceCUP !== null && (
+                          <p className="text-base font-bold" style={{ color: primaryColor }}>{product.priceCUP.toLocaleString('es-ES')} <span className="text-[9px] font-normal">CUP</span></p>
+                        )}
+                        {product.priceUSD !== null && <p className="text-[10px] text-gray-400">${product.priceUSD.toFixed(2)}</p>}
+                      </div>
+                      {product.stock !== null && product.stock <= 5 && (
+                        <p className="text-[9px] text-red-500 font-medium mt-0.5">Últimas {product.stock} unidades</p>
+                      )}
+                    </div>
+                    <div className="mt-1.5">
+                      {inCart ? (
+                        <div className="flex items-center gap-2 w-fit rounded-lg py-0.5 px-2" style={{ backgroundColor: primaryColor + '15' }}>
+                          <button onClick={() => updateCartQty(product.id, -1)} className="p-0.5 rounded"><Minus className="w-3.5 h-3.5" style={{ color: primaryColor }} /></button>
+                          <span className="text-xs font-bold min-w-[16px] text-center" style={{ color: primaryColor }}>{inCart.quantity}</span>
+                          <button onClick={() => { if (inCart.quantity < maxQty) updateCartQty(product.id, 1) }}
+                            className={`p-0.5 rounded ${inCart.quantity >= maxQty ? 'opacity-30' : ''}`}><Plus className="w-3.5 h-3.5" style={{ color: primaryColor }} /></button>
+                        </div>
+                      ) : (
+                        <button onClick={() => addToCart(product)}
+                          className="px-4 py-1.5 rounded-lg text-white text-[11px] font-medium flex items-center gap-1"
+                          style={{ backgroundColor: justAdded === product.id ? '#10b981' : primaryColor }}>
+                          {justAdded === product.id ? <><Check className="w-3 h-3" /> Listo</> : <><ShoppingCart className="w-3 h-3" /> Agregar</>}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Desktop: grid */}
+          <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+            {products.map((product) => {
+              const inCart = cart.find(c => c.product.id === product.id)
+              const maxQty = product.stock || 999
               return (
                 <div key={product.id}
                   className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
                   <div onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
                     className="aspect-square bg-gray-50 relative overflow-hidden cursor-pointer">
                     {product.imageUrl ? (
-                      <LazyImage src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover" />
+                      <LazyImage src={product.imageUrl} alt={product.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center"><Package className="w-8 h-8 text-gray-200" /></div>
                     )}
                     {product.stock !== null && product.stock <= 5 && product.stock > 0 && (
-                      <span className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">Últimas {product.stock}</span>
+                      <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Últimas {product.stock}</span>
                     )}
                     {product.isTopSeller && (
-                      <span className="absolute top-1.5 right-1.5 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: primaryColor }}>
+                      <span className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: primaryColor }}>
                         <Flame className="w-3 h-3 text-white" />
                       </span>
                     )}
                   </div>
-                  <div className="p-2 sm:p-3 flex flex-col flex-1">
+                  <div className="p-3 flex flex-col flex-1">
                     <p onClick={() => router.push(`/catalog/${slug}/product/${product.id}`)}
-                      className="font-medium text-gray-900 text-xs sm:text-sm line-clamp-2 leading-tight cursor-pointer">{product.name}</p>
-                    <div className="mt-1">
+                      className="font-medium text-gray-900 text-sm line-clamp-2 leading-tight cursor-pointer hover:underline">{product.name}</p>
+                    <div className="flex items-center gap-0.5 mt-1">
+                      {[1,2,3,4,5].map(s => (
+                        <Star key={s} className="w-3 h-3" fill={s <= 4 ? '#f59e0b' : 'none'} stroke={s <= 4 ? '#f59e0b' : '#d1d5db'} />
+                      ))}
+                    </div>
+                    <div className="mt-1.5">
                       {product.priceCUP !== null && (
-                        <p className="text-sm sm:text-lg font-bold leading-none" style={{ color: primaryColor }}>{product.priceCUP.toLocaleString('es-ES')} <span className="text-[9px] sm:text-xs font-normal">CUP</span></p>
+                        <p className="text-lg font-bold leading-none" style={{ color: primaryColor }}>{product.priceCUP.toLocaleString('es-ES')} <span className="text-xs font-normal">CUP</span></p>
                       )}
-                      {product.priceUSD !== null && <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">${product.priceUSD.toFixed(2)} USD</p>}
+                      {product.priceUSD !== null && <p className="text-xs text-gray-400 mt-0.5">${product.priceUSD.toFixed(2)} USD</p>}
                     </div>
                     <div className="mt-auto pt-2">
                       {inCart ? (
                         <div className="flex items-center justify-between rounded-lg py-1 px-1" style={{ backgroundColor: primaryColor + '15' }}>
-                          <button onClick={() => updateCartQty(product.id, -1)} className="p-1 rounded-md active:bg-white/60"><Minus className="w-3.5 h-3.5" style={{ color: primaryColor }} /></button>
+                          <button onClick={() => updateCartQty(product.id, -1)} className="p-1 rounded-md"><Minus className="w-3.5 h-3.5" style={{ color: primaryColor }} /></button>
                           <span className="text-xs font-bold" style={{ color: primaryColor }}>{inCart.quantity}</span>
-                          <button onClick={() => updateCartQty(product.id, 1)} className="p-1 rounded-md active:bg-white/60"><Plus className="w-3.5 h-3.5" style={{ color: primaryColor }} /></button>
+                          <button onClick={() => { if (inCart.quantity < maxQty) updateCartQty(product.id, 1) }}
+                            className={`p-1 rounded-md ${inCart.quantity >= maxQty ? 'opacity-30' : ''}`}><Plus className="w-3.5 h-3.5" style={{ color: primaryColor }} /></button>
                         </div>
                       ) : (
                         <button onClick={() => addToCart(product)}
-                          className="w-full py-1.5 sm:py-2 rounded-lg text-white text-[11px] sm:text-xs font-medium flex items-center justify-center gap-1"
+                          className="w-full py-2 rounded-lg text-white text-xs font-medium flex items-center justify-center gap-1"
                           style={{ backgroundColor: justAdded === product.id ? '#10b981' : primaryColor }}>
-                          {justAdded === product.id ? <Check className="w-3 h-3" /> : <><ShoppingCart className="w-3 h-3" /> Agregar</>}
+                          {justAdded === product.id ? <Check className="w-3.5 h-3.5" /> : <><ShoppingCart className="w-3.5 h-3.5" /> Agregar</>}
                         </button>
                       )}
                     </div>
