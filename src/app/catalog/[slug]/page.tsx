@@ -71,9 +71,30 @@ export default function CatalogPage() {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [cart, setCart] = useState<CartItem[]>([])
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try { return JSON.parse(localStorage.getItem('catalog-cart') || '[]') } catch { return [] }
+    }
+    return []
+  })
   const [showCart, setShowCart] = useState(false)
   const [searchInput, setSearchInput] = useState('')
+
+  // Persist cart to localStorage
+  useEffect(() => {
+    localStorage.setItem('catalog-cart', JSON.stringify(cart))
+  }, [cart])
+
+  // Listen for cart updates from product detail page
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'catalog-cart' && e.newValue) {
+        try { setCart(JSON.parse(e.newValue)) } catch {}
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
 
   useEffect(() => {
     if (rawSlug === 'resolve-host') {
@@ -555,7 +576,9 @@ export default function CatalogPage() {
                         <div className="flex items-center gap-2 mt-2">
                           <button onClick={() => updateCartQty(item.product.id, -1)} className="p-1 rounded-lg bg-gray-100 hover:bg-gray-200"><Minus className="w-3.5 h-3.5" /></button>
                           <span className="text-sm font-bold w-8 text-center">{item.quantity}</span>
-                          <button onClick={() => updateCartQty(item.product.id, 1)} className="p-1 rounded-lg bg-gray-100 hover:bg-gray-200"><Plus className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => updateCartQty(item.product.id, 1)}
+                            disabled={item.quantity >= (item.product.stock || 999)}
+                            className="p-1 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30"><Plus className="w-3.5 h-3.5" /></button>
                           <button onClick={() => removeFromCart(item.product.id)} className="ml-auto p-1 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </div>
@@ -578,7 +601,7 @@ export default function CatalogPage() {
                       const msg = encodeURIComponent(`Hola! Me interesan:\n\n${items}\n\n*Total: ${cartTotalCUP.toLocaleString('es-ES')} CUP ($${cartTotal.toFixed(2)} USD)*`)
                       window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
                     }} className="w-full py-3.5 rounded-xl text-white font-bold flex items-center justify-center gap-2 text-lg" style={{ backgroundColor: '#25D366' }}>
-                      <MessageCircle className="w-5 h-5" /> Enviar pedido
+                      <MessageCircle className="w-5 h-5" /> Me interesa
                     </button>
                   )}
                 </div>

@@ -38,6 +38,21 @@ export default function ProductDetailPage() {
   const [addedToCart, setAddedToCart] = useState(false)
   const barcodeRef = useRef<SVGSVGElement>(null)
 
+  // Shared cart via localStorage
+  interface CartItem { product: Product; quantity: number }
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try { return JSON.parse(localStorage.getItem('catalog-cart') || '[]') } catch { return [] }
+    }
+    return []
+  })
+  const cartCount = cart.reduce((s, i) => s + i.quantity, 0)
+
+  const saveCart = (newCart: CartItem[]) => {
+    setCart(newCart)
+    localStorage.setItem('catalog-cart', JSON.stringify(newCart))
+  }
+
   const primaryColor = store?.primaryColor || '#f97316'
   const avgRating = 4.7
   const totalReviews = MOCK_REVIEWS.length
@@ -110,6 +125,17 @@ export default function ProductDetailPage() {
   }
 
   const handleAddToCart = () => {
+    if (!product) return
+    const maxQty = product.stock || 999
+    const existing = cart.find(i => i.product.id === product.id)
+    let newCart: CartItem[]
+    if (existing) {
+      const newQty = Math.min(existing.quantity + quantity, maxQty)
+      newCart = cart.map(i => i.product.id === product.id ? { ...i, quantity: newQty } : i)
+    } else {
+      newCart = [...cart, { product, quantity: Math.min(quantity, maxQty) }]
+    }
+    saveCart(newCart)
     setAddedToCart(true)
     setTimeout(() => setAddedToCart(false), 2000)
   }
@@ -153,19 +179,34 @@ export default function ProductDetailPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-40">
-        <div className="px-4 sm:px-8 lg:px-12 py-3 flex items-center justify-between">
+        <div className="px-4 sm:px-8 lg:px-12 py-3 flex items-center justify-between gap-3">
           <button onClick={() => router.push(`/catalog/${slug}`)} className="p-2 rounded-xl hover:bg-gray-100 transition-colors shrink-0">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
-          {/* Center logo */}
           <div className="flex-1 flex justify-center">
             {(store?.logoDesktopUrl || store?.logoUrl) && (
               <img src={store.logoDesktopUrl || store.logoUrl || ''} alt={store?.name || ''} className="h-12 max-w-[260px] object-contain" />
             )}
           </div>
-          <button onClick={share} className="p-2 rounded-xl hover:bg-gray-100 transition-colors shrink-0">
-            <Share2 className="w-5 h-5 text-gray-500" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => router.push(`/catalog/${slug}`)}
+              className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors">
+              <ShoppingCart className="w-5 h-5 text-gray-600" />
+              {cartCount > 0 && (
+                <motion.span
+                  key={cartCount}
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="absolute -top-1 -right-1 w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center"
+                  style={{ backgroundColor: primaryColor }}>
+                  {cartCount}
+                </motion.span>
+              )}
+            </button>
+            <button onClick={share} className="p-2 rounded-xl hover:bg-gray-100 transition-colors shrink-0">
+              <Share2 className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
         </div>
       </header>
 
