@@ -24,7 +24,8 @@ import {
   Wand2,
   AlertTriangle,
   Printer,
-  Save
+  Save,
+  Smartphone
 } from 'lucide-react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -33,6 +34,7 @@ import { cn } from '@/lib/utils'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { PrintLabelModal } from '@/components/print/PrintLabelModal'
+import { PhoneUploadModal } from '@/components/uploads/PhoneUploadModal'
 import { useMarketExchangeRates } from '@/hooks/useMarketExchangeRates'
 
 type Step = 'info' | 'image' | 'pricing' | 'variants' | 'review'
@@ -167,6 +169,36 @@ export default function EditProductPage() {
   const [generatingVariantImage, setGeneratingVariantImage] = useState<string | null>(null) // variant id being generated
   const [cleaningVariantImage, setCleaningVariantImage] = useState<string | null>(null) // variant id being cleaned
   const [imagePrompt, setImagePrompt] = useState('') // Descripción para generar imagen del producto
+  const [showPhoneUpload, setShowPhoneUpload] = useState(false)
+
+  const handlePhoneUploadComplete = async (fileUrl: string) => {
+    setShowPhoneUpload(false)
+    try {
+      const response = await fetch(
+        `/api/upload/image?path=${encodeURIComponent(fileUrl)}&bucket=company-documents`
+      )
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.url) {
+          const imgResponse = await fetch(data.url)
+          const blob = await imgResponse.blob()
+          const reader = new FileReader()
+          reader.onload = () => {
+            const base64 = reader.result as string
+            setFormData(prev => ({ ...prev, imageUrl: base64, imageFile: null }))
+            setExistingImages([])
+            setSelectedExistingImage(null)
+            setUseExistingImage(false)
+          }
+          reader.readAsDataURL(blob)
+          return
+        }
+      }
+      setFormData(prev => ({ ...prev, imageUrl: fileUrl, imageFile: null }))
+    } catch (err) {
+      console.error('Error processing phone upload:', err)
+    }
+  }
   const [variantImagePrompts, setVariantImagePrompts] = useState<Record<string, string>>({}) // Descripción para generar imagen de variantes
 
   const [formData, setFormData] = useState({
@@ -1936,6 +1968,24 @@ export default function EditProductPage() {
                       </motion.div>
                     )}
 
+                    {/* Phone Upload Button */}
+                    {(existingImages.length === 0 || formData.imageUrl) && (
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setShowPhoneUpload(true)}
+                        className={cn(
+                          "w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-medium text-sm border-2 border-dashed transition-all",
+                          theme === 'dark'
+                            ? 'border-gray-600 text-gray-300 hover:border-purple-500/50 hover:bg-purple-500/5'
+                            : 'border-gray-300 text-gray-600 hover:border-purple-400 hover:bg-purple-50'
+                        )}
+                      >
+                        <Smartphone className="w-4 h-4" />
+                        Subir desde el teléfono
+                      </motion.button>
+                    )}
+
                     {/* AI Options */}
                     {!formData.imageUrl && existingImages.length === 0 && (
                       <div className="space-y-3">
@@ -3198,6 +3248,12 @@ export default function EditProductPage() {
           onPrintSuccess={(jobNumber) => {
             console.log('Print job created:', jobNumber)
           }}
+        />
+        <PhoneUploadModal
+          isOpen={showPhoneUpload}
+          onClose={() => setShowPhoneUpload(false)}
+          purpose="product_image"
+          onUploadComplete={handlePhoneUploadComplete}
         />
       </DashboardLayout>
     </ProtectedRoute>
