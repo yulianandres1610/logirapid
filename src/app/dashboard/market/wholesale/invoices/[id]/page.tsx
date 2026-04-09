@@ -240,17 +240,72 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     router.push(url.pathname + url.search, { scroll: false })
   }
 
-  // Payment modal state
+  // Payment modal state - multi-currency like POS
   const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [paymentData, setPaymentData] = useState({
-    amount: '',
-    paymentMethod: 'cash',
-    reference: '',
-    paymentDate: new Date().toISOString().split('T')[0],
-    notes: ''
-  })
+  interface PaymentEntry {
+    id: string
+    method: 'cash' | 'transfer' | 'card' | 'check' | 'zelle'
+    currency: 'USD' | 'CUP' | 'MLC'
+    amount: number
+    amountInUSD: number
+    reference?: string
+  }
+  const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>([])
+  const [payMethod, setPayMethod] = useState<'cash' | 'transfer' | 'card' | 'check' | 'zelle'>('cash')
+  const [payCurrency, setPayCurrency] = useState<'USD' | 'CUP' | 'MLC'>('USD')
+  const [payAmount, setPayAmount] = useState('')
+  const [payReference, setPayReference] = useState('')
+  const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0])
   const [savingPayment, setSavingPayment] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [rates, setRates] = useState({ CUP: 300, MLC: 1.2 })
+
+  // Fetch exchange rates
+  useEffect(() => {
+    fetch('/api/market/pos/exchange-rates')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.rates) {
+          setRates({ CUP: data.rates.CUP || 300, MLC: data.rates.MLC || 1.2 })
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const convertToUSD = (amount: number, currency: 'USD' | 'CUP' | 'MLC'): number => {
+    switch (currency) {
+      case 'CUP': return amount / rates.CUP
+      case 'MLC': return amount / rates.MLC
+      default: return amount
+    }
+  }
+
+  const totalPaidUSD = paymentEntries.reduce((s, p) => s + p.amountInUSD, 0)
+  const remainingUSD = (invoice?.amountDue || 0) - totalPaidUSD
+  const remainingCUP = Math.round(remainingUSD * rates.CUP)
+  const isFullyPaid = remainingUSD <= 0.01
+
+  const addPaymentEntry = () => {
+    const num = parseFloat(payAmount)
+    if (isNaN(num) || num <= 0) return
+    if (payMethod === 'transfer' && !payReference.trim()) return
+
+    const amountInUSD = convertToUSD(num, payCurrency)
+    setPaymentEntries([...paymentEntries, {
+      id: Date.now().toString(),
+      method: payMethod,
+      currency: payCurrency,
+      amount: num,
+      amountInUSD,
+      reference: payMethod === 'transfer' ? payReference.toUpperCase() : undefined
+    }])
+    setPayAmount('')
+    setPayReference('')
+  }
+
+  const removePaymentEntry = (id: string) => {
+    setPaymentEntries(paymentEntries.filter(p => p.id !== id))
+  }
 
   useEffect(() => {
     fetchInvoice()
@@ -297,29 +352,38 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const handleRegisterPayment = async () => {
+    if (paymentEntries.length === 0) return
     setSavingPayment(true)
     try {
-      const response = await fetch(`/api/market/wholesale/invoices/${invoiceId}/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: parseFloat(paymentData.amount),
-          paymentMethod: paymentData.paymentMethod,
-          reference: paymentData.reference || null,
-          paymentDate: paymentData.paymentDate,
-          notes: paymentData.notes || null
+      // Register each payment entry
+      let allOk = true
+      for (const entry of paymentEntries) {
+        const response = await fetch(`/api/market/wholesale/invoices/${invoiceId}/payments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: entry.amountInUSD,
+            paymentMethod: entry.method,
+            currency: entry.currency,
+            originalAmount: entry.amount,
+            reference: entry.reference || null,
+            paymentDate: payDate,
+            notes: entry.currency !== 'USD' ? `${entry.amount} ${entry.currency} @ ${entry.currency === 'CUP' ? rates.CUP : rates.MLC}` : null
+          })
         })
-      })
+        if (!response.ok) {
+          const err = await response.json()
+          alert(err.error || 'Error al registrar pago')
+          allOk = false
+          break
+        }
+      }
 
-      if (response.ok) {
+      if (allOk) {
         setShowPaymentModal(false)
-        setPaymentData({
-          amount: '',
-          paymentMethod: 'cash',
-          reference: '',
-          paymentDate: new Date().toISOString().split('T')[0],
-          notes: ''
-        })
+        setPaymentEntries([])
+        setPayAmount('')
+        setPayReference('')
         fetchInvoice()
       }
     } catch (error) {
@@ -1018,9 +1082,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                                 )}>
                                   {formatCurrency(line.unitPrice)}
                                 </span>
-                                {line.discountPercent > 0 && (
+                                {line.originalPrice > 0 && line.unitPrice < line.originalPrice && (
                                   <span className="text-xs text-emerald-500 block">
-                                    -{line.discountPercent}%
+                                    -{Math.round(((line.originalPrice - line.unitPrice) / line.originalPrice) * 100)}%
                                   </span>
                                 )}
                               </td>
@@ -1045,7 +1109,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                               {formatCurrency(invoice.subtotal)}
                             </td>
                           </tr>
-                          {invoice.discountAmount > 0 && (
+                          {invoice.discountAmount > 0 && invoice.discountPercent > 0 && invoice.discountPercent <= 100 && (
                             <tr>
                               <td colSpan={4} className="py-2 px-4 text-right text-gray-500">
                                 Descuento ({invoice.discountPercent}%):
@@ -1383,166 +1447,177 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Payment Modal */}
           <AnimatePresence>
-            {showPaymentModal && (
+            {showPaymentModal && invoice && (
               <>
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   onClick={() => setShowPaymentModal(false)}
-                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
-                />
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" />
+                <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
-                >
-                  <div className={cn(
-                    "w-full max-w-md rounded-2xl shadow-2xl border",
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <div className={cn("w-full max-w-lg rounded-2xl shadow-2xl border max-h-[90vh] overflow-y-auto",
                     theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
                   )} onClick={(e) => e.stopPropagation()}>
-                    <div className={cn(
-                      "px-6 py-4 border-b flex items-center justify-between",
-                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                    )}>
+                    {/* Header */}
+                    <div className={cn("px-6 py-4 border-b flex items-center justify-between sticky top-0 z-10",
+                      theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white')}>
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
                           <DollarSign className="w-5 h-5 text-emerald-600" />
                         </div>
                         <div>
-                          <h3 className={cn(
-                            "font-semibold",
-                            theme === 'dark' ? 'text-white' : 'text-gray-900'
-                          )}>Registrar Pago</h3>
-                          <p className="text-xs text-gray-500">Pendiente: {formatCurrency(invoice.amountDue)}</p>
+                          <h3 className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Registrar Pago</h3>
+                          <p className="text-xs text-gray-500">
+                            Pendiente: {formatCurrency(invoice.amountDue)} USD
+                            {' '}({Math.round(invoice.amountDue * rates.CUP).toLocaleString('es-ES')} CUP)
+                          </p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => setShowPaymentModal(false)}
-                        className={cn(
-                          "p-2 rounded-lg transition-colors",
-                          theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-                        )}
-                      >
+                      <button onClick={() => { setShowPaymentModal(false); setPaymentEntries([]) }}
+                        className={cn("p-2 rounded-lg transition-colors", theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100')}>
                         <X className="w-5 h-5" />
                       </button>
                     </div>
 
                     <div className="p-6 space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                          Monto
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={paymentData.amount}
-                          onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
-                          className={cn(
-                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all text-lg font-bold',
-                            theme === 'dark'
-                              ? 'bg-gray-700 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
-                              : 'bg-white border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
-                          )}
-                        />
+                      {/* Remaining amount */}
+                      <div className={cn("p-4 rounded-xl text-center",
+                        isFullyPaid ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-amber-50 dark:bg-amber-900/20')}>
+                        <p className="text-xs text-gray-500 mb-1">{isFullyPaid ? 'Pagado completo' : 'Restante'}</p>
+                        <p className={cn("text-2xl font-bold", isFullyPaid ? 'text-emerald-600' : 'text-amber-600')}>
+                          {isFullyPaid ? 'Completo' : `$${Math.max(0, remainingUSD).toFixed(2)} USD`}
+                        </p>
+                        {!isFullyPaid && remainingCUP > 0 && (
+                          <p className="text-sm text-gray-500">{remainingCUP.toLocaleString('es-ES')} CUP</p>
+                        )}
                       </div>
 
+                      {/* Currency selector */}
                       <div>
-                        <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                          Método de Pago
-                        </label>
-                        <select
-                          value={paymentData.paymentMethod}
-                          onChange={(e) => setPaymentData({ ...paymentData, paymentMethod: e.target.value })}
-                          className={cn(
-                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                            theme === 'dark'
-                              ? 'bg-gray-700 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
-                              : 'bg-white border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
-                          )}
-                        >
-                          <option value="cash">Efectivo</option>
-                          <option value="transfer">Transferencia</option>
-                          <option value="card">Tarjeta</option>
-                          <option value="check">Cheque</option>
-                          <option value="zelle">Zelle</option>
-                          <option value="credit">Crédito</option>
-                        </select>
+                        <label className="block text-xs font-medium mb-1.5 text-gray-500">Moneda</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(['USD', 'CUP', 'MLC'] as const).map(c => (
+                            <button key={c} onClick={() => setPayCurrency(c)}
+                              className={cn("py-2.5 rounded-xl text-sm font-bold transition-all border",
+                                payCurrency === c
+                                  ? 'bg-emerald-500 text-white border-emerald-500'
+                                  : theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-600'
+                              )}>
+                              {c} {c === 'CUP' ? `(${rates.CUP})` : c === 'MLC' ? `(${rates.MLC})` : ''}
+                            </button>
+                          ))}
+                        </div>
                       </div>
 
+                      {/* Method selector */}
                       <div>
-                        <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                          Fecha de Pago
-                        </label>
-                        <input
-                          type="date"
-                          value={paymentData.paymentDate}
-                          onChange={(e) => setPaymentData({ ...paymentData, paymentDate: e.target.value })}
-                          className={cn(
-                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                            theme === 'dark'
-                              ? 'bg-gray-700 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
-                              : 'bg-white border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
-                          )}
-                        />
+                        <label className="block text-xs font-medium mb-1.5 text-gray-500">Método</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {([
+                            { id: 'cash', label: 'Efectivo' },
+                            { id: 'transfer', label: 'Transfer.' },
+                            { id: 'card', label: 'Tarjeta' }
+                          ] as const).map(m => (
+                            <button key={m.id} onClick={() => setPayMethod(m.id as any)}
+                              className={cn("py-2.5 rounded-xl text-sm font-medium transition-all border",
+                                payMethod === m.id
+                                  ? 'bg-blue-500 text-white border-blue-500'
+                                  : theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-600'
+                              )}>
+                              {m.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
 
+                      {/* Amount input */}
                       <div>
-                        <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                          Referencia (opcional)
+                        <label className="block text-xs font-medium mb-1.5 text-gray-500">
+                          Monto en {payCurrency}
                         </label>
-                        <input
-                          type="text"
-                          value={paymentData.reference}
-                          onChange={(e) => setPaymentData({ ...paymentData, reference: e.target.value })}
-                          placeholder="Número de transacción, cheque, etc."
-                          className={cn(
-                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all',
-                            theme === 'dark'
-                              ? 'bg-gray-700 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
-                              : 'bg-white border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
-                          )}
-                        />
+                        <div className="flex gap-2">
+                          <input type="number" step="0.01" value={payAmount}
+                            onChange={(e) => setPayAmount(e.target.value)}
+                            placeholder={payCurrency === 'CUP' ? remainingCUP.toLocaleString() : remainingUSD > 0 ? remainingUSD.toFixed(2) : '0'}
+                            onKeyDown={(e) => e.key === 'Enter' && addPaymentEntry()}
+                            className={cn('flex-1 px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 text-lg font-bold',
+                              theme === 'dark'
+                                ? 'bg-gray-700 border-gray-600 text-white focus:border-emerald-500 focus:ring-emerald-500/20'
+                                : 'bg-white border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
+                            )} />
+                          <button onClick={addPaymentEntry}
+                            disabled={!payAmount || parseFloat(payAmount) <= 0}
+                            className="px-4 py-3 bg-emerald-500 text-white rounded-xl font-bold disabled:opacity-50 hover:bg-emerald-600 transition-colors">
+                            <Plus className="w-5 h-5" />
+                          </button>
+                        </div>
+                        {payAmount && parseFloat(payAmount) > 0 && payCurrency !== 'USD' && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            = ${convertToUSD(parseFloat(payAmount), payCurrency).toFixed(2)} USD
+                          </p>
+                        )}
                       </div>
+
+                      {/* Transfer reference */}
+                      {payMethod === 'transfer' && (
+                        <input type="text" value={payReference}
+                          onChange={(e) => setPayReference(e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 13))}
+                          placeholder="Código de confirmación (13 caracteres)"
+                          className={cn('w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 font-mono',
+                            theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200 text-gray-900')} />
+                      )}
+
+                      {/* Payment date */}
+                      <div>
+                        <label className="block text-xs font-medium mb-1.5 text-gray-500">Fecha</label>
+                        <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)}
+                          className={cn('w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
+                            theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200 text-gray-900')} />
+                      </div>
+
+                      {/* Payment entries list */}
+                      {paymentEntries.length > 0 && (
+                        <div className={cn("rounded-xl border divide-y",
+                          theme === 'dark' ? 'border-gray-700 divide-gray-700' : 'border-gray-200 divide-gray-100')}>
+                          {paymentEntries.map(entry => (
+                            <div key={entry.id} className="flex items-center justify-between px-4 py-3">
+                              <div>
+                                <span className="text-sm font-bold">{entry.amount.toLocaleString('es-ES')} {entry.currency}</span>
+                                <span className="text-xs text-gray-400 ml-2">
+                                  {entry.method === 'cash' ? 'Efectivo' : entry.method === 'transfer' ? 'Transferencia' : entry.method === 'card' ? 'Tarjeta' : entry.method}
+                                </span>
+                                {entry.reference && <span className="text-xs text-blue-400 ml-1">({entry.reference})</span>}
+                                {entry.currency !== 'USD' && (
+                                  <p className="text-xs text-gray-400">= ${entry.amountInUSD.toFixed(2)} USD</p>
+                                )}
+                              </div>
+                              <button onClick={() => removePaymentEntry(entry.id)} className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30">
+                                <X className="w-4 h-4 text-red-500" />
+                              </button>
+                            </div>
+                          ))}
+                          <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900/50 flex justify-between text-sm font-bold">
+                            <span>Total pagos:</span>
+                            <span className="text-emerald-600">${totalPaidUSD.toFixed(2)} USD</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    <div className={cn(
-                      "flex gap-3 p-6 pt-4 border-t",
-                      theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-                    )}>
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setShowPaymentModal(false)}
-                        className={cn(
-                          "flex-1 py-3 rounded-xl font-medium transition-all",
-                          theme === 'dark'
-                            ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                        )}
-                      >
+                    {/* Footer */}
+                    <div className={cn("flex gap-3 p-6 pt-4 border-t sticky bottom-0",
+                      theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white')}>
+                      <button onClick={() => { setShowPaymentModal(false); setPaymentEntries([]) }}
+                        className={cn("flex-1 py-3 rounded-xl font-medium",
+                          theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-700')}>
                         Cancelar
-                      </motion.button>
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={handleRegisterPayment}
-                        disabled={savingPayment || !paymentData.amount || parseFloat(paymentData.amount) <= 0}
-                        className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        {savingPayment ? (
-                          <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            Guardando...
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle className="w-5 h-5" />
-                            Registrar Pago
-                          </>
-                        )}
-                      </motion.button>
+                      </button>
+                      <button onClick={handleRegisterPayment}
+                        disabled={savingPayment || paymentEntries.length === 0}
+                        className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                        {savingPayment ? <><Loader2 className="w-5 h-5 animate-spin" /> Guardando...</>
+                          : <><CheckCircle className="w-5 h-5" /> Registrar ({paymentEntries.length})</>}
+                      </button>
                     </div>
                   </div>
                 </motion.div>

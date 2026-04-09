@@ -301,7 +301,8 @@ export async function POST(request: NextRequest) {
       subtotal += lineSubtotal
     }
 
-    const discountAmount = discountPercent ? (subtotal * discountPercent / 100) : 0
+    const safeDiscountPercent = Math.min(Math.max(discountPercent || 0, 0), 100)
+    const discountAmount = safeDiscountPercent > 0 ? (subtotal * safeDiscountPercent / 100) : 0
     const totalAmount = subtotal - discountAmount
 
     // Calculate downpayment amount if specified

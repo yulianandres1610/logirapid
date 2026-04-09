@@ -112,6 +112,8 @@ export async function POST(
     const {
       amount,
       paymentMethod,
+      currency,
+      originalAmount,
       reference,
       paymentDate,
       notes
@@ -162,10 +164,13 @@ export async function POST(
     }
 
     const amountDue = parseFloat(invoice.amount_due) || 0
-    if (amount > amountDue) {
+    // Allow 5% tolerance for exchange rate rounding
+    const tolerance = amountDue * 0.05
+    const effectiveAmount = Math.min(amount, amountDue)
+    if (amount > amountDue + tolerance) {
       return NextResponse.json({
         success: false,
-        error: `El monto del pago ($${amount}) excede el saldo pendiente ($${amountDue})`
+        error: `El monto del pago ($${amount.toFixed(2)}) excede el saldo pendiente ($${amountDue.toFixed(2)})`
       }, { status: 400 })
     }
 
@@ -189,7 +194,12 @@ export async function POST(
     const paymentNumber = `PAG-${year}-${String(nextNumber).padStart(4, '0')}`
 
     await db.transaction(async (client) => {
-      // Create payment
+      // Create payment - store in USD (converted) and note original currency
+      const paymentNotes = [
+        notes,
+        currency && currency !== 'USD' && originalAmount ? `Original: ${originalAmount} ${currency}` : null
+      ].filter(Boolean).join(' | ')
+
       await client.query(`
         INSERT INTO market_invoice_payments (
           invoice_id, payment_number, amount, currency, payment_method,
@@ -198,17 +208,17 @@ export async function POST(
       `, [
         invoiceId,
         paymentNumber,
-        amount,
-        'USD',
+        effectiveAmount,
+        currency || 'USD',
         paymentMethod,
         reference || null,
         paymentDate || new Date().toISOString().split('T')[0],
-        notes || null,
+        paymentNotes || null,
         payload.userId
       ])
 
       // Update invoice amounts
-      const newAmountPaid = parseFloat(invoice.amount_paid) + amount
+      const newAmountPaid = parseFloat(invoice.amount_paid) + effectiveAmount
       const newAmountDue = parseFloat(invoice.total_amount) - newAmountPaid
       const newPaymentStatus = newAmountDue <= 0 ? 'paid' : 'partial'
 
@@ -228,7 +238,7 @@ export async function POST(
           current_balance = current_balance - $1,
           updated_at = NOW()
         WHERE id = $2
-      `, [amount, invoice.customer_id])
+      `, [effectiveAmount, invoice.customer_id])
     })
 
     return NextResponse.json({
@@ -236,8 +246,9 @@ export async function POST(
       message: `Pago ${paymentNumber} registrado exitosamente`,
       data: {
         paymentNumber,
-        amount,
-        newAmountDue: amountDue - amount
+        amount: effectiveAmount,
+        currency: currency || 'USD',
+        newAmountDue: Math.max(0, amountDue - effectiveAmount)
       }
     })
 
