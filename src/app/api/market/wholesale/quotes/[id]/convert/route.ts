@@ -146,20 +146,24 @@ export async function POST(
 
       const invoiceId = invoiceResult.rows[0].id
 
-      // Copy quote lines to invoice lines
+      // Copy quote lines to invoice lines (with warehouse_quantities from quote's warehouse)
+      const quoteWarehouseId = quote.warehouse_id
       for (const line of linesResult.rows) {
-        // Get current cost price for the product
-        const costResult = await client.query(`
-          SELECT cost_price FROM market_products WHERE id = $1
-        `, [line.product_id])
+        const costResult = await client.query(
+          `SELECT cost_price FROM market_products WHERE id = $1`, [line.product_id]
+        )
         const costPrice = costResult.rows[0]?.cost_price || 0
+        const qty = parseFloat(line.quantity) || 0
+
+        // Build warehouse_quantities: assign full quantity to the quote's warehouse
+        const warehouseQuantities = quoteWarehouseId ? { [quoteWarehouseId]: qty } : {}
 
         await client.query(`
           INSERT INTO market_invoice_lines (
             invoice_id, product_id, variant_id, product_name, product_sku,
             quantity, unit_price, cost_price, original_price, discount_percent,
-            discount_amount, subtotal, notes
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            discount_amount, subtotal, warehouse_quantities, notes
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         `, [
           invoiceId,
           line.product_id,
@@ -170,9 +174,10 @@ export async function POST(
           line.unit_price,
           costPrice,
           line.original_price,
-          line.discount_percent,
-          line.discount_amount,
+          line.discount_percent || 0,
+          line.discount_amount || 0,
           line.subtotal,
+          JSON.stringify(warehouseQuantities),
           line.notes
         ])
       }
