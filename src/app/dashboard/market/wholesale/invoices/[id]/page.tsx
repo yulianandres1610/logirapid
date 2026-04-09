@@ -318,10 +318,6 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         const result = await response.json()
         if (result.success) {
           setInvoice(result.data)
-          setPaymentData(prev => ({
-            ...prev,
-            amount: result.data.amountDue.toFixed(2)
-          }))
         }
       }
     } catch (error) {
