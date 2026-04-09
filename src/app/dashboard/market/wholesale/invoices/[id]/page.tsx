@@ -321,7 +321,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
   const loadImageAsDataUrl = (src: string): Promise<{ dataUrl: string; width: number; height: number }> => {
     return new Promise((resolve) => {
-      const img = new Image()
+      const img = new window.Image()
       img.crossOrigin = 'anonymous'
       img.onload = () => {
         const canvas = document.createElement('canvas')
