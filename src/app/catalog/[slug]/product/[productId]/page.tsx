@@ -68,21 +68,30 @@ export default function ProductDetailPage() {
     }
   }, [product])
 
+  const [outOfStock, setOutOfStock] = useState(false)
+
   useEffect(() => {
     const fetchProduct = async () => {
       setLoading(true)
+      setOutOfStock(false)
       try {
         const res = await fetch(`/api/public/catalog/${slug}?limit=200`)
         const data = await res.json()
         if (data.success) {
           setStore(data.data.store)
-          const found = data.data.products.find((p: Product) => p.id === parseInt(productId))
+          const pid = parseInt(productId)
+          // Search in products + topSellers
+          const allProducts = [...(data.data.products || []), ...(data.data.topSellers || [])]
+          const found = allProducts.find((p: Product) => p.id === pid)
           if (found) {
             setProduct(found)
-            const related = data.data.products
+            const related = (data.data.products || [])
               .filter((p: Product) => p.id !== found.id && p.category === found.category)
               .slice(0, 4)
             setRelatedProducts(related)
+          } else {
+            // Product not in stock - it was filtered out
+            setOutOfStock(true)
           }
         }
       } catch {} finally { setLoading(false) }
@@ -121,11 +130,18 @@ export default function ProductDetailPage() {
 
   if (!product) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center p-8">
+      <div className="text-center p-8 max-w-sm">
         <Package className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-        <h1 className="text-2xl font-bold text-gray-700 mb-2">Producto no encontrado</h1>
-        <button onClick={() => router.push(`/catalog/${slug}`)} className="mt-4 px-6 py-2 rounded-xl text-white" style={{ backgroundColor: primaryColor }}>
-          Volver al catálogo
+        <h1 className="text-xl font-bold text-gray-700 mb-2">
+          {outOfStock ? 'Producto agotado' : 'Producto no encontrado'}
+        </h1>
+        <p className="text-gray-500 text-sm mb-4">
+          {outOfStock
+            ? 'Este producto ya no está disponible en este momento. Revisa nuestro catálogo para ver los productos en stock.'
+            : 'El producto que buscas no existe o fue eliminado.'}
+        </p>
+        <button onClick={() => router.push(`/catalog/${slug}`)} className="px-6 py-2.5 rounded-xl text-white font-medium" style={{ backgroundColor: primaryColor }}>
+          Ver catálogo
         </button>
       </div>
     </div>
