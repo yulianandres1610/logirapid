@@ -704,11 +704,11 @@ export default function SalesReportPage() {
                         <tbody>
                           {(() => {
                             const methods = data.byPaymentMethod || []
-                            const totalOrders = methods.reduce((s, m) => s + parseInt(String(m.orders)), 0)
+                            const totalAmount = methods.reduce((s, m) => s + parseFloat(String(m.amount)), 0)
                             return methods.length > 0 ? methods.map((m, i) => {
                               const amount = parseFloat(String(m.amount))
                               const orders = parseInt(String(m.orders))
-                              const pct = totalOrders > 0 ? ((orders / totalOrders) * 100).toFixed(1) : '0'
+                              const pct = totalAmount > 0 ? ((amount / totalAmount) * 100).toFixed(1) : '0'
                               return (
                                 <tr key={i} className={cn('border-b', theme === 'dark' ? 'border-gray-700/50' : 'border-gray-100')}>
                                   <td className="py-3 px-2">
