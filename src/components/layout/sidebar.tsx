@@ -697,7 +697,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     },
     {
       icon: TrendingUp,
-      label: "Inteligencia",
+      label: "Marketing",
       href: "/dashboard/market/marketing-intel",
       hasSubmenu: true,
       submenuItems: [

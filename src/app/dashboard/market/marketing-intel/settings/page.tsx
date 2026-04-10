@@ -38,7 +38,17 @@ export default function SettingsPage() {
     setLoading(true)
     fetch('/api/marketing-intel/api-keys')
       .then(r => r.json())
-      .then(res => { if (res.success) setKeys(res.data) })
+      .then(res => {
+        if (res.success) {
+          const arr = Array.isArray(res.data) ? res.data : res.data?.keys || []
+          setKeys({ keys: arr.map((k: any) => ({
+            id: k.id, prefix: k.keyPrefix || k.prefix, name: k.name,
+            type: k.agentType || k.type, lastUsed: k.lastUsedAt || k.lastUsed,
+            active: k.isActive !== undefined ? k.isActive : k.active,
+            createdAt: k.createdAt
+          })), total: arr.length })
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])

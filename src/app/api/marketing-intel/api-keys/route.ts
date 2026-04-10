@@ -60,10 +60,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { name, agentType, permissions, expiresInDays } = body
+    const { name, agentType, type, permissions, expiresInDays } = body
+    const resolvedType = agentType || type || 'openclaw'
 
-    if (!name || !agentType) {
-      return NextResponse.json({ success: false, error: 'name y agentType requeridos' }, { status: 400 })
+    if (!name) {
+      return NextResponse.json({ success: false, error: 'name es requerido' }, { status: 400 })
     }
 
     const { rawKey, keyHash, keyPrefix } = generateApiKey()
@@ -78,15 +79,16 @@ export async function POST(request: NextRequest) {
     await db.query(`
       INSERT INTO mi_api_keys (company_id, key_hash, key_prefix, name, agent_type, permissions, expires_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [payload.companyId, keyHash, keyPrefix, name, agentType, JSON.stringify(permissions || []), expiresAt])
+    `, [payload.companyId, keyHash, keyPrefix, name, resolvedType, JSON.stringify(permissions || []), expiresAt])
 
     return NextResponse.json({
       success: true,
       data: {
+        key: rawKey,
         apiKey: rawKey,
         keyPrefix,
         name,
-        agentType,
+        agentType: resolvedType,
         expiresAt
       },
       message: 'Guarda esta API key. No se mostrará de nuevo.'
