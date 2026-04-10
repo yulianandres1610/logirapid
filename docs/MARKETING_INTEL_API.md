@@ -423,33 +423,169 @@ Content-Type: application/json
 
 ---
 
+## 8. Registrar Agentes de IA
+
+Registra o actualiza agentes de cualquier tipo: ventas, investigación de mercado, diseño de campañas.
+
+```
+POST /api/marketing-intel/external/agents
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+  "agents": [
+    {
+      "agentId": "sales-whatsapp-001",
+      "name": "María Ventas",
+      "channel": "whatsapp",
+      "role": "sales",
+      "capabilities": ["sell", "customer_support", "order_creation"],
+      "description": "Agente de ventas WhatsApp especializado en ferretería",
+      "model": "gpt-4"
+    },
+    {
+      "agentId": "research-prices-001",
+      "name": "Investigador de Precios",
+      "channel": "research",
+      "role": "research",
+      "capabilities": ["price_research", "competitor_analysis", "market_trends"],
+      "description": "Investiga precios de competencia en tiempo real"
+    },
+    {
+      "agentId": "campaign-designer-001",
+      "name": "Diseñador de Campañas",
+      "channel": "campaign",
+      "role": "campaign",
+      "capabilities": ["campaign_design", "script_writing", "social_media", "video_scripts", "branding"],
+      "description": "Diseña campañas completas con scripts de venta para video, redes sociales y WhatsApp"
+    },
+    {
+      "agentId": "analyst-001",
+      "name": "Analista Comercial",
+      "channel": "research",
+      "role": "analyst",
+      "capabilities": ["market_analysis", "pricing_strategy", "pricelist_design", "trend_detection"],
+      "description": "Analiza tendencias del mercado y sugiere estrategias de precios"
+    }
+  ]
+}
+```
+
+**Roles disponibles:**
+
+| Rol | Descripción | Capabilities típicas |
+|-----|-------------|---------------------|
+| `sales` | Agente de venta directa (WhatsApp, web) | `sell`, `customer_support`, `order_creation`, `upsell` |
+| `research` | Investigación de precios y competencia | `price_research`, `competitor_analysis`, `market_trends`, `web_scraping` |
+| `campaign` | Diseño de campañas y contenido | `campaign_design`, `script_writing`, `social_media`, `video_scripts`, `branding` |
+| `analyst` | Análisis de datos y estrategia | `market_analysis`, `pricing_strategy`, `pricelist_design`, `trend_detection` |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": { "created": 3, "updated": 1, "total": 4 },
+  "message": "3 agentes creados, 1 actualizados"
+}
+```
+
+---
+
+### Listar Agentes Registrados
+
+```
+GET /api/marketing-intel/external/agents
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "agentId": "sales-whatsapp-001",
+      "name": "María Ventas",
+      "channel": "whatsapp",
+      "status": "active",
+      "totalSales": 1250.00,
+      "totalOrders": 45,
+      "avgOrderValue": 27.78,
+      "metadata": {
+        "role": "sales",
+        "capabilities": ["sell", "customer_support"],
+        "model": "gpt-4"
+      },
+      "createdAt": "2026-04-10T10:00:00Z",
+      "updatedAt": "2026-04-10T15:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## 9. Resumen de Endpoints
+
+| # | Método | Endpoint | Descripción |
+|---|--------|----------|-------------|
+| 1 | GET | `/external/products` | Catálogo de productos |
+| 2 | GET | `/external/current-prices` | Precios actuales por ID/SKU |
+| 3 | POST | `/external/competitors` | Registrar competidores |
+| 4 | POST | `/external/competitor-prices` | Enviar precios de competencia (batch) |
+| 5 | POST | `/external/agent-sales` | Reportar venta de agente IA |
+| 6 | POST | `/external/suggestions` | Enviar sugerencias de IA |
+| 7 | POST | `/external/campaigns` | Crear campaña con scripts de venta |
+| 8 | GET | `/external/agents` | Listar agentes registrados |
+| 8 | POST | `/external/agents` | Registrar/actualizar agentes |
+
+---
+
 ## Flujo Recomendado para OpenClaw
 
 ```
-1. INVESTIGACIÓN (Research Agent)
-   ├─ GET /external/products → Obtener catálogo Servisumic
-   ├─ Investigar precios de competidores (web scraping, etc.)
+0. SETUP INICIAL (una sola vez)
+   ├─ POST /external/agents → Registrar todos los agentes (sales, research, campaign, analyst)
+   └─ Cada agente recibe su agentId único para tracking
+
+1. INVESTIGACIÓN (Research Agent: research-prices-001)
+   ├─ GET /external/products → Obtener catálogo completo Servisumic
+   ├─ Investigar precios de competidores (web scraping, marketplaces, etc.)
    ├─ POST /external/competitors → Registrar competidores encontrados
-   ├─ POST /external/competitor-prices → Enviar batch de precios
-   └─ POST /external/suggestions → Sugerir ajustes de precio
+   ├─ POST /external/competitor-prices → Enviar batch de precios (auto-matchea + auto-sugiere)
+   └─ POST /external/suggestions → Sugerir ajustes de precio basados en datos
 
-2. CAMPAÑAS (Campaign Agent)
-   ├─ Analizar datos de precios y tendencias
-   ├─ Diseñar campaña con productos target
-   ├─ Escribir scripts de venta (video, social, WhatsApp)
-   ├─ POST /external/campaigns → Crear campaña completa
-   └─ El admin aprueba desde el dashboard
+2. ANÁLISIS (Analyst Agent: analyst-001)
+   ├─ Analizar datos de precios acumulados
+   ├─ Detectar tendencias y oportunidades
+   ├─ POST /external/suggestions → Sugerir listas de precios mayoristas por volumen
+   └─ POST /external/suggestions → Sugerir bundles y estrategias de pricing
 
-3. VENTAS (Sales Agent - WhatsApp)
-   ├─ Atender clientes via WhatsApp
-   ├─ Usar scripts de campaña activa
+3. CAMPAÑAS (Campaign Agent: campaign-designer-001)
+   ├─ Diseñar campaña con productos target basada en datos del mercado
+   ├─ Escribir scripts de venta completos:
+   │   ├─ Elevator pitch (30 segundos)
+   │   ├─ Posts Facebook / Instagram / WhatsApp
+   │   ├─ Script de video (hook → problema → solución → prueba → oferta → CTA)
+   │   ├─ Manejo de objeciones
+   │   ├─ Key messages y hashtags
+   │   └─ Target audience
+   ├─ POST /external/campaigns → Crear campaña completa con scripts
+   └─ El admin aprueba y activa desde el dashboard
+
+4. VENTAS (Sales Agent: sales-whatsapp-001)
+   ├─ Atender clientes via WhatsApp usando scripts de campaña activa
+   ├─ Manejar objeciones con respuestas pre-diseñadas
    ├─ Cerrar venta
-   └─ POST /external/agent-sales → Reportar venta atribuida al agente
+   ├─ POST /external/agent-sales → Reportar venta atribuida al agente
+   └─ El ranking se actualiza automáticamente en el dashboard
 
-4. MONITOREO (continuo)
-   ├─ GET /external/current-prices → Verificar nuestros precios actuales
-   ├─ Comparar con últimos datos de competencia
-   └─ POST /external/suggestions → Nuevas sugerencias si hay cambios
+5. MONITOREO CONTINUO (todos los agentes)
+   ├─ Research: Monitorear precios de competencia periódicamente
+   ├─ Analyst: Revisar métricas de campañas activas
+   ├─ Campaign: Ajustar scripts según resultados
+   └─ Sales: Reportar feedback de clientes
 ```
 
 ---
