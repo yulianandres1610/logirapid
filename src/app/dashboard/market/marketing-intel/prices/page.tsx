@@ -43,7 +43,17 @@ export default function CompetitorPricesPage() {
       .then(r => r.json())
       .then(res => {
         if (res.success) {
-          const arr = Array.isArray(res.data) ? res.data : res.data?.prices || []
+          const raw = Array.isArray(res.data) ? res.data : res.data?.prices || []
+          const arr = raw.map((r: any) => ({
+            id: r.id,
+            productName: r.productName || r.product_name || 'Sin nombre',
+            competitorName: r.competitorName || r.competitor_name || 'Desconocido',
+            competitorPrice: r.competitorPrice ?? r.competitor_price ?? 0,
+            ourPrice: r.ourPrice ?? r.our_price ?? 0,
+            difference: r.priceDifference ?? r.difference ?? r.price_difference ?? 0,
+            percentDifference: r.priceDiffPercent ?? r.percentDifference ?? r.price_diff_percent ?? 0,
+            capturedAt: r.capturedAt || r.captured_at || ''
+          }))
           setData({ prices: arr, total: res.pagination?.total || arr.length, page: res.pagination?.page || 1, limit: res.pagination?.limit || 50, totalPages: res.pagination?.totalPages || 1 })
         }
       })
@@ -53,7 +63,7 @@ export default function CompetitorPricesPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const formatCurrency = (n: number) => `$${n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const formatCurrency = (n: number | null | undefined) => `$${(n ?? 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const getDiffColor = (pct: number) => {
     if (pct < -5) return 'text-emerald-500' // we're cheaper
