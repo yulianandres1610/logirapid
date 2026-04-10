@@ -13,10 +13,14 @@ interface StoreInfo {
   facebookUrl: string | null; instagramUrl: string | null; telegramUrl: string | null
 }
 
+interface WholesaleTier {
+  minQty: number; priceUSD: number; priceCUP: number; discountPercent: number | null; priceType: string
+}
+
 interface Product {
   id: number; name: string; description: string | null; sku: string; category: string | null
   imageUrl: string | null; unit: string; priceUSD: number | null; priceCUP: number | null
-  stock: number | null; isTopSeller?: boolean
+  stock: number | null; isTopSeller?: boolean; wholesaleTiers?: WholesaleTier[]
 }
 
 interface CartItem { product: Product; quantity: number }
@@ -440,6 +444,14 @@ export default function CatalogPage() {
                       {product.stock !== null && product.stock <= 5 && (
                         <p className="text-[9px] text-red-500 font-medium mt-0.5">Últimas {product.stock} unidades</p>
                       )}
+                      {product.wholesaleTiers && product.wholesaleTiers.length > 0 && (
+                        <div className="mt-1 flex items-center gap-1">
+                          <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                            Mayorista: desde {product.wholesaleTiers[0].minQty}+ uds
+                            {product.wholesaleTiers[0].priceCUP > 0 && ` a ${product.wholesaleTiers[0].priceCUP.toLocaleString('es-ES')} CUP`}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="mt-1.5">
                       {inCart ? (
@@ -500,6 +512,17 @@ export default function CatalogPage() {
                         <p className="text-lg font-bold leading-none" style={{ color: primaryColor }}>{product.priceCUP.toLocaleString('es-ES')} <span className="text-xs font-normal">CUP</span></p>
                       )}
                       {product.priceUSD !== null && <p className="text-xs text-gray-400 mt-0.5">${product.priceUSD.toFixed(2)} USD</p>}
+                      {product.wholesaleTiers && product.wholesaleTiers.length > 0 && (
+                        <div className="mt-1.5 p-1.5 rounded-lg bg-blue-50 border border-blue-100">
+                          <p className="text-[10px] font-bold text-blue-700 mb-0.5">Precio mayorista</p>
+                          {product.wholesaleTiers.map((tier, ti) => (
+                            <p key={ti} className="text-[10px] text-blue-600">
+                              {tier.minQty}+ uds: <span className="font-bold">{tier.priceCUP.toLocaleString('es-ES')} CUP</span>
+                              {tier.discountPercent && <span className="text-blue-400 ml-1">(-{tier.discountPercent}%)</span>}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="mt-auto pt-2">
                       {inCart ? (

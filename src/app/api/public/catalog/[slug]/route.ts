@@ -167,6 +167,45 @@ export async function GET(
       } catch {}
     }
 
+    // Get wholesale pricelist tiers for all products (public pricing)
+    let priceTiers: Record<number, Array<{ minQty: number; priceUSD: number; priceCUP: number; discountPercent: number | null; priceType: string }>> = {}
+    try {
+      const tiersResult = await db.query(`
+        SELECT mpi.product_id, mpi.min_quantity, mpi.price_type, mpi.fixed_price,
+          mpi.discount_percent, mpi.discount_amount, mp.name as pricelist_name,
+          p.selling_price as base_price
+        FROM market_pricelist_items mpi
+        JOIN market_pricelists mp ON mp.id = mpi.pricelist_id
+        JOIN market_products p ON p.id = mpi.product_id
+        WHERE mp.company_id = $1 AND mp.is_active = true AND mpi.product_id IS NOT NULL
+          AND mpi.min_quantity > 1
+        ORDER BY mpi.product_id, mpi.min_quantity ASC
+      `, [companyId])
+
+      for (const tier of tiersResult.rows) {
+        const pid = tier.product_id
+        if (!priceTiers[pid]) priceTiers[pid] = []
+        const basePrice = parseFloat(tier.base_price) || 0
+        let tierPrice = basePrice
+        if (tier.price_type === 'fixed' && tier.fixed_price) {
+          tierPrice = parseFloat(tier.fixed_price)
+        } else if (tier.price_type === 'discount_percent' && tier.discount_percent) {
+          tierPrice = basePrice * (1 - parseFloat(tier.discount_percent) / 100)
+        } else if (tier.price_type === 'discount_amount' && tier.discount_amount) {
+          tierPrice = basePrice - parseFloat(tier.discount_amount)
+        }
+        priceTiers[pid].push({
+          minQty: parseInt(tier.min_quantity) || 1,
+          priceUSD: catalog.show_usd_price ? tierPrice : 0,
+          priceCUP: catalog.show_cup_price ? Math.round(tierPrice * exchangeRate) : 0,
+          discountPercent: tier.discount_percent ? parseFloat(tier.discount_percent) : null,
+          priceType: tier.price_type
+        })
+      }
+    } catch (e) {
+      console.log('[Catalog] Pricelist tiers query skipped:', e instanceof Error ? e.message : e)
+    }
+
     const mapProduct = (p: any) => ({
       id: p.id,
       name: p.name,
@@ -179,7 +218,8 @@ export async function GET(
       priceUSD: catalog.show_usd_price ? parseFloat(p.selling_price) : null,
       priceCUP: catalog.show_cup_price ? Math.round(parseFloat(p.selling_price) * exchangeRate) : null,
       stock: catalog.show_stock ? parseFloat(p.total_stock) : null,
-      isTopSeller: topSellingIds.includes(p.id)
+      isTopSeller: topSellingIds.includes(p.id),
+      wholesaleTiers: priceTiers[p.id] || []
     })
 
     const products = productsResult.rows.map(mapProduct)
