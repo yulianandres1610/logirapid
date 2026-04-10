@@ -111,6 +111,10 @@ export default function CreateExpensePage() {
     expenseDate: new Date().toISOString().split('T')[0],
     categoryId: '',
     vendorName: '',
+    vendorId: '',
+    licenseNumber: '',
+    vendorActivity: '',
+    purchaseLocation: '',
     receiptNumber: '',
     notes: '',
     receiptFile: null as File | null,
@@ -830,6 +834,10 @@ export default function CreateExpensePage() {
               currency: formData.currency,
               expenseDate: formData.expenseDate,
               vendorName: formData.vendorName || null,
+              vendorId: formData.vendorId || null,
+              licenseNumber: formData.licenseNumber || null,
+              vendorActivity: formData.vendorActivity || null,
+              purchaseLocation: formData.purchaseLocation || null,
               receiptNumber: formData.receiptNumber || null,
               notes: formData.notes || null,
               receiptPath,
@@ -858,6 +866,10 @@ export default function CreateExpensePage() {
             expenseDate: formData.expenseDate,
             categoryId: formData.categoryId ? parseInt(formData.categoryId) : null,
             vendorName: formData.vendorName || null,
+            vendorId: formData.vendorId || null,
+            licenseNumber: formData.licenseNumber || null,
+            vendorActivity: formData.vendorActivity || null,
+            purchaseLocation: formData.purchaseLocation || null,
             receiptNumber: formData.receiptNumber || null,
             notes: formData.notes || null,
             receiptPath,
@@ -1957,6 +1969,45 @@ export default function CreateExpensePage() {
                         />
                       </div>
                     </div>
+
+                    {/* Declaración Jurada Fields (for manual expenses without receipt) */}
+                    {entryMethod === 'manual' && (
+                      <div className="space-y-4 p-4 rounded-xl border-2 border-dashed border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-900/10">
+                        <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wide">
+                          Datos para Declaración Jurada (Compras sin comprobante)
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Carnet de Identidad / NIT</label>
+                            <input type="text" value={formData.vendorId}
+                              onChange={(e) => setFormData(prev => ({ ...prev, vendorId: e.target.value }))}
+                              placeholder="Ej: 85010112345 o NIT"
+                              className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-orange-500" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">No. de Licencia</label>
+                            <input type="text" value={formData.licenseNumber}
+                              onChange={(e) => setFormData(prev => ({ ...prev, licenseNumber: e.target.value }))}
+                              placeholder="No. de licencia TCP"
+                              className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-orange-500" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Actividad que realiza</label>
+                            <input type="text" value={formData.vendorActivity}
+                              onChange={(e) => setFormData(prev => ({ ...prev, vendorActivity: e.target.value }))}
+                              placeholder="Ej: Venta de materiales"
+                              className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-orange-500" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Lugar de compra</label>
+                            <input type="text" value={formData.purchaseLocation}
+                              onChange={(e) => setFormData(prev => ({ ...prev, purchaseLocation: e.target.value }))}
+                              placeholder="Dirección del establecimiento"
+                              className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-orange-500" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Receipt Number */}
                     <div>

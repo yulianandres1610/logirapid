@@ -237,6 +237,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
 
     // Detectar si es creación en lote (array de expenses con sharedData)
+    // Ensure declaracion jurada columns exist
+    try {
+      await db.query('ALTER TABLE market_expenses ADD COLUMN IF NOT EXISTS vendor_id VARCHAR(50)')
+      await db.query('ALTER TABLE market_expenses ADD COLUMN IF NOT EXISTS license_number VARCHAR(50)')
+      await db.query('ALTER TABLE market_expenses ADD COLUMN IF NOT EXISTS vendor_activity VARCHAR(500)')
+      await db.query('ALTER TABLE market_expenses ADD COLUMN IF NOT EXISTS purchase_location VARCHAR(500)')
+      await db.query('ALTER TABLE market_expense_items ADD COLUMN IF NOT EXISTS quantity DECIMAL(10,2)')
+      await db.query('ALTER TABLE market_expense_items ADD COLUMN IF NOT EXISTS unit_price DECIMAL(12,2)')
+    } catch { /* ignore */ }
+
     if (body.expenses && Array.isArray(body.expenses) && body.sharedData) {
       const { expenses, sharedData } = body
 
@@ -260,11 +270,12 @@ export async function POST(request: NextRequest) {
         const result = await db.query(`
           INSERT INTO market_expenses (
             company_id, description, amount, currency, expense_date,
-            category_id, vendor_name, receipt_path, receipt_type,
+            category_id, vendor_name, vendor_id, license_number, vendor_activity, purchase_location,
+            receipt_path, receipt_type,
             ai_category_suggestion, ai_confidence, ai_analysis,
             receipt_number, notes,
             created_by, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW())
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW(), NOW())
           RETURNING id
         `, [
           companyId,
@@ -274,6 +285,10 @@ export async function POST(request: NextRequest) {
           sharedData.expenseDate,
           expense.categoryId || null,
           sharedData.vendorName || null,
+          sharedData.vendorId || null,
+          sharedData.licenseNumber || null,
+          sharedData.vendorActivity || null,
+          sharedData.purchaseLocation || null,
           sharedData.receiptPath || null,
           sharedData.receiptType || null,
           expense.aiSuggestion || expense.categoryName || null,
@@ -329,6 +344,10 @@ export async function POST(request: NextRequest) {
       expenseDate,
       categoryId,
       vendorName,
+      vendorId,
+      licenseNumber,
+      vendorActivity,
+      purchaseLocation,
       receiptPath,
       receiptType,
       aiSuggestion,
@@ -348,11 +367,12 @@ export async function POST(request: NextRequest) {
     const result = await db.query(`
       INSERT INTO market_expenses (
         company_id, description, amount, currency, expense_date,
-        category_id, vendor_name, receipt_path, receipt_type,
+        category_id, vendor_name, vendor_id, license_number, vendor_activity, purchase_location,
+        receipt_path, receipt_type,
         ai_category_suggestion, ai_confidence, ai_analysis,
         receipt_number, notes,
         created_by, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW(), NOW())
       RETURNING id
     `, [
       companyId,
@@ -362,6 +382,10 @@ export async function POST(request: NextRequest) {
       expenseDate,
       categoryId || null,
       vendorName || null,
+      vendorId || null,
+      licenseNumber || null,
+      vendorActivity || null,
+      purchaseLocation || null,
       receiptPath || null,
       receiptType || null,
       aiSuggestion || null,

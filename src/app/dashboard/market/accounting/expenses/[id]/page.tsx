@@ -32,6 +32,9 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import jsPDF from 'jspdf'
+import JsBarcode from 'jsbarcode'
+import { detectBrandFromHost, brands } from '@/lib/brand-config'
 
 interface ExpenseItem {
   id: number
@@ -55,6 +58,10 @@ interface ExpenseDetail {
   aiConfidence: number | null
   aiAnalysis: string | null
   vendorName: string | null
+  vendorId: string | null
+  licenseNumber: string | null
+  vendorActivity: string | null
+  purchaseLocation: string | null
   receiptPath: string | null
   receiptType: string | null
   receiptNumber: string | null
@@ -138,6 +145,163 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
       month: 'long',
       year: 'numeric'
     })
+  }
+
+  const downloadDeclaracionJurada = async () => {
+    if (!expense) return
+    const brandName = detectBrandFromHost(window.location.hostname)
+    const brand = brands[brandName]
+    const pr = [235, 91, 12] // Servisumic orange
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
+    const pw = 215.9, mg = 18, cw = pw - mg * 2
+    let y = 18
+
+    // Load logo
+    try {
+      const logoImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new window.Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => resolve(img)
+        img.onerror = reject
+        img.src = brand.logos.light
+      })
+      const canvas = document.createElement('canvas')
+      canvas.width = logoImg.naturalWidth; canvas.height = logoImg.naturalHeight
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(logoImg, 0, 0)
+      const logoData = canvas.toDataURL('image/png')
+      const aspect = logoImg.naturalWidth / logoImg.naturalHeight
+      doc.addImage(logoData, 'PNG', mg, y, 18 * aspect, 18, undefined, 'FAST')
+    } catch {}
+
+    // Title
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(40, 40, 40)
+    doc.text('DECLARACIÓN JURADA', pw / 2, y + 6, { align: 'center' })
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100)
+    doc.text('PARA COMPRAS SIN COMPROBANTE', pw / 2, y + 12, { align: 'center' })
+
+    // Barcode
+    try {
+      const bcCanvas = document.createElement('canvas')
+      JsBarcode(bcCanvas, `GAS${expense.id}`, { format: 'CODE128', width: 2, height: 50, displayValue: false, margin: 5 })
+      doc.addImage(bcCanvas.toDataURL('image/png'), 'PNG', pw - mg - 45, y, 45, 10, undefined, 'FAST')
+    } catch {}
+
+    y += 16
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(40, 40, 40)
+    doc.text(`No. GAS-${String(expense.id).padStart(4, '0')}`, pw - mg, y, { align: 'right' })
+
+    y += 4
+    // Orange line
+    doc.setFillColor(pr[0], pr[1], pr[2]); doc.rect(mg, y, cw, 1.5, 'F')
+    y += 8
+
+    // Company info
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80)
+    doc.text('Empresa de Servicios y Suministros de Materiales de la Construcción SERVISUMIC S.U.R.L.', mg, y)
+    y += 4; doc.text('NIT: 50004199243  |  Carretera a Berroa Km 1.5 al lado del Frigorífico', mg, y)
+    y += 10
+
+    // Declaration text
+    doc.setFontSize(10); doc.setTextColor(40, 40, 40); doc.setFont('helvetica', 'normal')
+    const declarantName = expense.vendorName || '________________________________'
+    const vendorId = expense.vendorId || '________________________________'
+    const licenseNo = expense.licenseNumber || '________'
+    const activity = expense.vendorActivity || '________________________________'
+    const location = expense.purchaseLocation || '________________________________'
+
+    const declText = `${declarantName}, en mi condición de Trabajador por Cuenta Propia, TCP, autorizado por la Dirección de Trabajo a ejercer la actividad de ${activity}, con No. ${licenseNo}, de la Dirección Municipal de Trabajo de Plaza de la Revolución y con Código de Barras de Identificación Tributaria (NIT) ${vendorId}, Folio 2302 de la DPA de fecha ${formatDate(expense.expenseDate)}, emitido por la ONAT, DECLARO lo siguiente:`
+
+    const lines = doc.splitTextToSize(declText, cw)
+    doc.text(lines, mg, y)
+    y += lines.length * 5 + 6
+
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Que en la fecha que a continuación se expone se procedió a realizar compras o adquirir servicios sin que el/la oferente entregara comprobante o certifico de pago del producto comprado o servicio realizado, para lo cual dejo constancia de lo siguiente:`, mg, y, { maxWidth: cw })
+    y += 18
+
+    doc.text(`Lugar de compra o del servicio prestado: ${location}`, mg, y); y += 6
+    doc.text(`Datos del oferente: vendedor/prestador:`, mg, y); y += 5
+    doc.text(`Nombre y Apellidos: ${declarantName}`, mg, y)
+    doc.text(`Actividad que realiza: ${activity}`, mg + cw / 2, y); y += 5
+    doc.text(`No. de Licencia: ${licenseNo}`, mg, y)
+    doc.text(`Carnet identidad: ${vendorId}`, mg + cw / 2, y); y += 10
+
+    // Items table
+    const colWidths = [12, 75, 25, 30, 35]
+    const headers = ['No', 'Producto/Servicio', 'Cantidad', 'Precio', 'Importe']
+
+    // Table header
+    doc.setFillColor(pr[0], pr[1], pr[2])
+    doc.rect(mg, y - 4, cw, 8, 'F')
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(255, 255, 255)
+    let tx = mg + 2
+    headers.forEach((h, i) => {
+      doc.text(h, i >= 2 ? tx + colWidths[i] - 2 : tx, y, i >= 2 ? { align: 'right' } : undefined)
+      tx += colWidths[i]
+    })
+    y += 7
+
+    // Table rows
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40, 40, 40)
+    let total = 0
+
+    if (expense.items && expense.items.length > 0) {
+      expense.items.forEach((item, i) => {
+        if (i % 2 === 0) { doc.setFillColor(248, 248, 248); doc.rect(mg, y - 4, cw, 7, 'F') }
+        tx = mg + 2
+        doc.text(String(i + 1), tx, y); tx += colWidths[0]
+        doc.text(item.description.substring(0, 40), tx, y); tx += colWidths[1]
+        doc.text('1', tx + colWidths[2] - 2, y, { align: 'right' }); tx += colWidths[2]
+        doc.text(`$${item.amount.toFixed(2)}`, tx + colWidths[3] - 2, y, { align: 'right' }); tx += colWidths[3]
+        doc.text(`$${item.amount.toFixed(2)}`, tx + colWidths[4] - 2, y, { align: 'right' })
+        total += item.amount
+        y += 7
+      })
+    } else {
+      // Single item from expense description
+      doc.text('1', mg + 2, y)
+      doc.text(expense.description.substring(0, 40), mg + 2 + colWidths[0], y)
+      doc.text('1', mg + 2 + colWidths[0] + colWidths[1] + colWidths[2] - 2, y, { align: 'right' })
+      doc.text(`$${expense.amount.toFixed(2)}`, mg + 2 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] - 2, y, { align: 'right' })
+      doc.text(`$${expense.amount.toFixed(2)}`, mg + cw - 2, y, { align: 'right' })
+      total = expense.amount
+      y += 7
+    }
+
+    // Total row
+    doc.setDrawColor(200, 200, 200); doc.line(mg, y - 2, mg + cw, y - 2)
+    y += 4
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11)
+    doc.text('Total', mg + 2 + colWidths[0], y)
+    doc.setTextColor(pr[0], pr[1], pr[2])
+    doc.text(`$${total.toFixed(2)} ${expense.currency}`, mg + cw - 2, y, { align: 'right' })
+    y += 14
+
+    // Legal text
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40, 40, 40)
+    doc.text('Todo lo cual certifico suscribiendo el presente documento como constancia para el registro contable.', mg, y)
+    y += 20
+
+    // Signature lines
+    doc.setDrawColor(100, 100, 100)
+    doc.line(mg, y, mg + 70, y)
+    doc.line(pw - mg - 70, y, pw - mg, y)
+    y += 5
+    doc.setFontSize(8); doc.setTextColor(100, 100, 100)
+    doc.text('TCP (Firma)', mg + 35, y, { align: 'center' })
+    doc.text('Fecha', pw - mg - 35, y, { align: 'center' })
+
+    // Footer
+    y = 265
+    doc.setDrawColor(200, 200, 200); doc.line(mg, y, pw - mg, y)
+    y += 4
+    doc.setFontSize(7); doc.setTextColor(130, 130, 130)
+    doc.text('Documento generado por LogiRapid/Servisumic  |  facturacion@servisumic.com  |  +5363707599', pw / 2, y, { align: 'center' })
+
+    doc.save(`Declaracion-Jurada-GAS-${String(expense.id).padStart(4, '0')}.pdf`)
+
   }
 
   const formatDateTime = (date: string) => {
@@ -260,6 +424,15 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
                 >
                   <Printer className="w-4 h-4" />
                   Imprimir
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={downloadDeclaracionJurada}
+                  className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl transition-colors font-medium"
+                >
+                  <Download className="w-4 h-4" />
+                  Declaración Jurada
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.02 }}
