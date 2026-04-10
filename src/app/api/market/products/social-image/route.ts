@@ -46,29 +46,40 @@ export async function POST(request: NextRequest) {
 
     const isFB = platform === 'facebook'
     const dimensions = isFB ? '940x788 pixels (landscape)' : '1080x1350 pixels (portrait)'
+    const cupPrice = priceCUP ? priceCUP.toLocaleString() : '0'
+    const usdPrice = priceUSD || '0.00'
 
-    const prompt = `Generate a HIGH QUALITY, SHARP, vibrant product advertisement image for social media.
+    const prompt = `Generate a professional social media product advertisement for a hardware store brand called "Servisumic".
 
-SIZE: ${dimensions}
+IMAGE SIZE: ${dimensions}
 
-DESIGN:
-- Eye-catching modern e-commerce advertisement
-- Bold orange (#f97316) background at the top ~20% with a large white pentagon/arrow shape pointing up, filling most of the image
-- Light orange (#fdba74) decorative triangles on the sides
-- The product photo must be LARGE, SHARP, HIGH-RESOLUTION in the center of the white area
-- Product name: "${productName}" in bold, large dark text below the product
-- Price: "${priceCUP ? priceCUP.toLocaleString() + ' CUP' : ''}" in EXTRA LARGE bold orange text
-- Secondary price: "$${priceUSD || '0.00'} USD" in smaller gray text
-- Orange footer bar with: phone "+5352584700" left, "Servisumic - Ferretería y Mercado" center, "catalogo.servisumic.com" right, all in white
+BRAND IDENTITY:
+- Brand name: "Servisumic - Ferretería y Mercado"
+- Primary color: Vivid Orange (#EB5B0C / rgb(235,91,12))
+- Secondary color: Dark brown (#3F3B39 / rgb(63,59,57))
+- Style: Bold, modern, industrial-chic hardware store aesthetic
+- Phone: +5352584700
+- Website: catalogo.servisumic.com
 
-QUALITY REQUIREMENTS:
-- ULTRA SHARP text - every letter must be perfectly crisp and readable
-- HIGH RESOLUTION product image - maintain all original detail
-- Vivid, saturated colors - make the orange POP
-- Professional studio-quality lighting on the product
-- Clean white (#FFFFFF) background in the center area
-- The image must look like it was made by a professional graphic designer
-- READY TO POST on ${isFB ? 'Facebook' : 'Instagram'} - no further editing needed`
+LAYOUT:
+- TOP: Orange (#EB5B0C) header area with geometric white pentagon shape pointing upward from center, lighter orange triangles on sides as decoration
+- CENTER: Large pure white area inside the pentagon shape. Place the product photo here, LARGE and CENTERED, occupying at least 40-50% of the white space. The product must be the HERO of the image - sharp, well-lit, eye-catching
+- BELOW PRODUCT: Product name "${productName}" in bold dark text (large, readable)
+- PRICES (must be prominent and readable):
+  * Main price: "${cupPrice} CUP" in EXTRA LARGE BOLD orange (#EB5B0C) text - this is the attention grabber
+  * Secondary: "$${usdPrice} USD" in medium gray text below
+- FOOTER: Solid orange (#EB5B0C) bar across the bottom with white text:
+  * Left side: phone icon + "+5352584700"
+  * Center: "Servisumic" logo text + "Ferretería y Mercado"
+  * Right side: globe icon + "catalogo.servisumic.com"
+
+CRITICAL REQUIREMENTS:
+- The product image must be CRYSTAL CLEAR, HIGH RESOLUTION - preserve every detail from the reference photo
+- All text must be PERFECTLY SHARP and READABLE - no blurry or distorted text
+- The orange must be VIBRANT and SATURATED (#EB5B0C exactly)
+- Both prices (CUP and USD) MUST appear clearly - these are essential for the customer
+- Professional graphic design quality - ready to publish on ${isFB ? 'Facebook' : 'Instagram'}
+- Make it ATTENTION-GRABBING - a customer scrolling social media should stop and look`
 
     const contents: any[] = [{ text: prompt }]
 
