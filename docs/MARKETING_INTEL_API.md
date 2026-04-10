@@ -627,15 +627,101 @@ Content-Type: application/json
 }
 ```
 
-**Frecuencia recomendada:**
+**Frecuencia recomendada de heartbeat:**
 - Cada 30-60 segundos mientras trabaja
 - Al iniciar y terminar cada tarea
-- Al cambiar de status (working → idle → offline)
+- Al cambiar de status
 
-**Dashboard en vivo:** `https://mercado.servisumic.com/dashboard/market/marketing-intel/activity`
-- Se actualiza automáticamente cada 10 segundos
-- Muestra: status de cada agente, acción actual, progreso, feed de actividad
-- Un agente se considera "online" si reportó actividad en los últimos 5 minutos
+---
+
+## 9b. Traza de Trabajo (Agent Events)
+
+Log granular de cada acción del agente. Permite ver en el dashboard exactamente qué sitio está scrapeando, qué producto comparó, qué match encontró, qué error tuvo.
+
+```
+POST /api/marketing-intel/external/agent-events
+Content-Type: application/json
+```
+
+**Body (batch):**
+```json
+{
+  "events": [
+    {
+      "agentId": "research-prices-001",
+      "type": "scrape_start",
+      "level": "info",
+      "text": "Iniciando scraping de precios en ISASUR Market",
+      "target": "isasur.com",
+      "url": "https://isasur.com/alimentos"
+    },
+    {
+      "agentId": "research-prices-001",
+      "type": "product_found",
+      "level": "info",
+      "text": "Encontrado: Arroz Guyanes 2Kg a $2.30",
+      "target": "isasur.com",
+      "productName": "Arroz Guyanes 2Kg"
+    },
+    {
+      "agentId": "research-prices-001",
+      "type": "product_matched",
+      "level": "success",
+      "text": "Match: Arroz Guyanes 2Kg → Nuestro ID #42 (diff: -$0.20)",
+      "productId": 42,
+      "productName": "Arroz Guyanes 2Kg"
+    },
+    {
+      "agentId": "research-prices-001",
+      "type": "error",
+      "level": "error",
+      "text": "Timeout al scrappear página 3 de ISASUR",
+      "target": "isasur.com",
+      "url": "https://isasur.com/alimentos?page=3"
+    }
+  ]
+}
+```
+
+**Body (evento individual):**
+```json
+{
+  "agentId": "sales-whatsapp-001",
+  "type": "sale_completed",
+  "level": "success",
+  "text": "Venta cerrada: $15.50 USD - 3 productos",
+  "metadata": { "customerName": "Juan Pérez", "orderTotal": 15.50 }
+}
+```
+
+**Tipos de evento:**
+
+| type | Uso |
+|------|-----|
+| `scrape_start` | Inicio de scraping en un sitio |
+| `scrape_end` | Fin de scraping |
+| `product_found` | Producto encontrado en competidor |
+| `product_matched` | Producto matcheado con nuestro catálogo |
+| `price_compared` | Comparación de precio realizada |
+| `suggestion_created` | Sugerencia generada |
+| `sale_started` | Inicio de conversación de venta |
+| `sale_completed` | Venta cerrada |
+| `campaign_created` | Campaña diseñada |
+| `batch_start` | Inicio de batch de procesamiento |
+| `batch_end` | Fin de batch |
+| `error` | Error genérico |
+| `warning` | Advertencia |
+| `info` | Información general |
+
+**Niveles:** `info`, `warning`, `error`, `success`
+
+**Dashboard:** `https://mercado.servisumic.com/dashboard/market/marketing-intel/activity`
+- Se actualiza cada 8 segundos
+- Centro de control con tarjetas por agente (gradient por rol)
+- Barra de progreso, items procesados/matched/errores
+- Feed lateral de eventos con dots de color por nivel
+- Un agente se considera "online" si tuvo heartbeat en los últimos 5 minutos
+- Retención de eventos: 7 días automático
 
 ---
 
@@ -652,7 +738,8 @@ Content-Type: application/json
 | 7 | POST | `/external/campaigns` | Crear campaña con scripts de venta |
 | 8 | GET | `/external/agents` | Listar agentes registrados |
 | 9 | POST | `/external/agents` | Registrar/actualizar agentes |
-| 10 | POST | `/external/activity` | **Reportar actividad en tiempo real** |
+| 10 | POST | `/external/agent-heartbeat` | **Estado en tiempo real (UPSERT)** |
+| 11 | POST | `/external/agent-events` | **Traza de trabajo granular (batch)** |
 
 ---
 
