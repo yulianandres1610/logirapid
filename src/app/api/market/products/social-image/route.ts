@@ -47,33 +47,28 @@ export async function POST(request: NextRequest) {
     const isFB = platform === 'facebook'
     const dimensions = isFB ? '940x788 pixels (landscape)' : '1080x1350 pixels (portrait)'
 
-    const prompt = `Create a product advertisement image. Follow this EXACT template design:
+    const prompt = `Generate a HIGH QUALITY, SHARP, vibrant product advertisement image for social media.
 
-CANVAS: ${dimensions}
+SIZE: ${dimensions}
 
-LAYOUT (top to bottom):
-1. TOP SECTION (~20% height): Solid orange background (#f97316). A white pentagon/arrow shape starts here with its peak pointing up at the top center. Two lighter orange (#fdba74) decorative triangles on the left and right sides, partially behind the white shape.
+DESIGN:
+- Eye-catching modern e-commerce advertisement
+- Bold orange (#f97316) background at the top ~20% with a large white pentagon/arrow shape pointing up, filling most of the image
+- Light orange (#fdba74) decorative triangles on the sides
+- The product photo must be LARGE, SHARP, HIGH-RESOLUTION in the center of the white area
+- Product name: "${productName}" in bold, large dark text below the product
+- Price: "${priceCUP ? priceCUP.toLocaleString() + ' CUP' : ''}" in EXTRA LARGE bold orange text
+- Secondary price: "$${priceUSD || '0.00'} USD" in smaller gray text
+- Orange footer bar with: phone "+5352584700" left, "Servisumic - Ferretería y Mercado" center, "catalogo.servisumic.com" right, all in white
 
-2. CENTER SECTION (~65% height): The white pentagon shape widens as it goes down, filling most of the width. Inside this white area:
-   - The product image centered and large (occupying ~50% of the white area)
-   - Below the product: the product name "${productName}" in bold dark text
-   - Below the name: "${priceCUP ? priceCUP.toLocaleString() + ' CUP' : ''}" in LARGE bold orange (#f97316) text
-   - Below CUP price: "$${priceUSD || '0.00'} USD" in smaller gray text
-
-3. FOOTER BAR (~8% height): Solid orange (#f97316) bar at the very bottom with:
-   - Left: white phone icon circle + "+5352584700" in white text
-   - Center: "Servisumic - Ferretería y Mercado" in white bold text
-   - Right: white globe icon circle + "catalogo.servisumic.com" in white text
-
-STYLE RULES:
-- Clean, modern, minimalist e-commerce ad
-- The product floats naturally in the white area, no frame or border around it
-- Text must be sharp, crisp, and perfectly readable
-- Orange color is EXACTLY #f97316
-- White area background is pure white #FFFFFF
-- Professional typography, centered alignment
-- NO shadows, NO gradients on the white area
-- The design must look identical every time, only the product/price changes`
+QUALITY REQUIREMENTS:
+- ULTRA SHARP text - every letter must be perfectly crisp and readable
+- HIGH RESOLUTION product image - maintain all original detail
+- Vivid, saturated colors - make the orange POP
+- Professional studio-quality lighting on the product
+- Clean white (#FFFFFF) background in the center area
+- The image must look like it was made by a professional graphic designer
+- READY TO POST on ${isFB ? 'Facebook' : 'Instagram'} - no further editing needed`
 
     const contents: any[] = [{ text: prompt }]
 

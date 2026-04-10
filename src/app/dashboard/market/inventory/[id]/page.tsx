@@ -339,13 +339,13 @@ export default function ProductDetailPage() {
         try {
           const imgRes = await fetch(product.imageUrl)
           const imgBlob = await imgRes.blob()
-          // Compress to max 800px and 70% quality to keep payload small
+          // High quality: max 1200px, 90% JPEG
           productImageBase64 = await new Promise<string>((resolve) => {
             const img = new window.Image()
             img.crossOrigin = 'anonymous'
             img.onload = () => {
               const canvas = document.createElement('canvas')
-              const maxDim = 800
+              const maxDim = 1200
               let w = img.width, h = img.height
               if (w > maxDim || h > maxDim) {
                 if (w > h) { h = Math.round((h / w) * maxDim); w = maxDim }
@@ -354,7 +354,7 @@ export default function ProductDetailPage() {
               canvas.width = w; canvas.height = h
               const ctx = canvas.getContext('2d')!
               ctx.drawImage(img, 0, 0, w, h)
-              const dataUrl = canvas.toDataURL('image/jpeg', 0.7)
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
               resolve(dataUrl.split(',')[1] || '')
             }
             img.onerror = () => resolve('')
