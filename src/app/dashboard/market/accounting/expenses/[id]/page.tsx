@@ -154,10 +154,10 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
     const pr = [235, 91, 12] // Servisumic orange
 
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
-    const pw = 215.9, mg = 18, cw = pw - mg * 2
-    let y = 18
+    const pw = 215.9, mg = 14, cw = pw - mg * 2
+    let y = 14
 
-    // Load logo
+    // ── HEADER: Logo left + Title right (same as invoice) ──
     try {
       const logoImg = await new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new window.Image()
@@ -171,36 +171,49 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
       const ctx = canvas.getContext('2d')!
       ctx.drawImage(logoImg, 0, 0)
       const logoData = canvas.toDataURL('image/png')
+      const maxH = 16
       const aspect = logoImg.naturalWidth / logoImg.naturalHeight
-      doc.addImage(logoData, 'PNG', mg, y, 18 * aspect, 18, undefined, 'FAST')
+      doc.addImage(logoData, 'PNG', mg, y, maxH * aspect, maxH, undefined, 'FAST')
     } catch {}
 
-    // Title
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(40, 40, 40)
-    doc.text('DECLARACIÓN JURADA', pw / 2, y + 6, { align: 'center' })
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100)
-    doc.text('PARA COMPRAS SIN COMPROBANTE', pw / 2, y + 12, { align: 'center' })
+    // Title badge on the right (orange box like invoice "OFERTA" badge)
+    const badgeW = 55, badgeH = 10
+    doc.setFillColor(pr[0], pr[1], pr[2])
+    doc.roundedRect(pw - mg - badgeW, y, badgeW, badgeH, 2, 2, 'F')
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255)
+    doc.text('DECLARACIÓN JURADA', pw - mg - badgeW / 2, y + 6.5, { align: 'center' })
 
-    // Barcode
+    // Number below badge
+    doc.setFontSize(11); doc.setTextColor(60, 60, 60); doc.setFont('helvetica', 'bold')
+    doc.text(`GAS-${String(expense.id).padStart(4, '0')}`, pw - mg, y + 16, { align: 'right' })
+
+    // Barcode below number
     try {
       const bcCanvas = document.createElement('canvas')
-      JsBarcode(bcCanvas, `GAS${expense.id}`, { format: 'CODE128', width: 2, height: 50, displayValue: false, margin: 5 })
-      doc.addImage(bcCanvas.toDataURL('image/png'), 'PNG', pw - mg - 45, y, 45, 10, undefined, 'FAST')
+      JsBarcode(bcCanvas, `GAS${String(expense.id).padStart(4, '0')}`, { format: 'CODE128', width: 2, height: 50, displayValue: false, margin: 3 })
+      doc.addImage(bcCanvas.toDataURL('image/png'), 'PNG', pw - mg - 50, y + 19, 50, 10, undefined, 'FAST')
+      doc.setFontSize(6); doc.setTextColor(120, 120, 120); doc.setFont('helvetica', 'normal')
+      doc.text(`GAS${String(expense.id).padStart(4, '0')}`, pw - mg - 25, y + 31, { align: 'center' })
     } catch {}
 
-    y += 16
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(40, 40, 40)
-    doc.text(`No. GAS-${String(expense.id).padStart(4, '0')}`, pw - mg, y, { align: 'right' })
+    y += 18
+    // Company info below logo
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100)
+    doc.text('ServiSumic Infanta', mg, y); y += 3.5
+    doc.text('NIT: 50004199243', mg, y); y += 3.5
+    doc.text('Carretera a Berroa Km 1.5  |  facturacion@servisumic.com  |  +5363707599', mg, y)
+    y += 10
 
-    y += 4
-    // Orange line
+    // ── Orange accent bar ──
     doc.setFillColor(pr[0], pr[1], pr[2]); doc.rect(mg, y, cw, 1.5, 'F')
     y += 8
 
-    // Company info
-    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80)
-    doc.text('Empresa de Servicios y Suministros de Materiales de la Construcción SERVISUMIC S.U.R.L.', mg, y)
-    y += 4; doc.text('NIT: 50004199243  |  Carretera a Berroa Km 1.5 al lado del Frigorífico', mg, y)
+    // Subtitle
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(40, 40, 40)
+    doc.text('DECLARACIÓN JURADA PARA COMPRAS SIN COMPROBANTE', pw / 2, y, { align: 'center' })
+    y += 4
+    doc.setFontSize(8); doc.setTextColor(100, 100, 100); doc.setFont('helvetica', 'normal')
+    doc.text(`Fecha: ${formatDate(expense.expenseDate)}`, pw / 2, y, { align: 'center' })
     y += 10
 
     // Declaration text
