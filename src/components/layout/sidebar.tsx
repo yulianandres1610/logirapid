@@ -702,6 +702,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       hasSubmenu: true,
       submenuItems: [
         { icon: BarChart3, label: "Dashboard", href: "/dashboard/market/marketing-intel" },
+        { icon: TrendingUp, label: "Actividad en Vivo", href: "/dashboard/market/marketing-intel/activity" },
         { icon: Tag, label: "Precios Competencia", href: "/dashboard/market/marketing-intel/prices" },
         { icon: CreditCard, label: "Campañas", href: "/dashboard/market/marketing-intel/campaigns" },
         { icon: Users, label: "Agentes de Venta", href: "/dashboard/market/marketing-intel/agents" },
