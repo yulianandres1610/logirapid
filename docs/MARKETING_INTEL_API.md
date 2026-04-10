@@ -526,7 +526,120 @@ GET /api/marketing-intel/external/agents
 
 ---
 
-## 9. Resumen de Endpoints
+## 9. Reportar Actividad en Tiempo Real
+
+Permite que los agentes reporten qué están haciendo en cada momento. El dashboard muestra esta información en vivo (auto-refresh cada 10 segundos).
+
+```
+POST /api/marketing-intel/external/activity
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+  "agentId": "research-prices-001",
+  "status": "working",
+  "action": "Investigando precios de pintura en Ferretería El Rápido",
+  "details": "Comparando 15 productos de la categoría Pinturas y Recubrimientos",
+  "progress": 45
+}
+```
+
+**Campos:**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `agentId` | string | Sí | ID del agente que reporta |
+| `status` | string | No | `working`, `idle`, `error`, `offline` (default: `working`) |
+| `action` | string | Sí | Descripción de lo que está haciendo el agente |
+| `details` | string | No | Contexto adicional |
+| `progress` | number | No | Porcentaje de progreso 0-100 |
+| `metadata` | object | No | Datos adicionales libres |
+
+**Response:**
+```json
+{
+  "success": true
+}
+```
+
+**Ejemplos de uso por tipo de agente:**
+
+```json
+// Research Agent investigando
+{
+  "agentId": "research-prices-001",
+  "status": "working",
+  "action": "Escaneando precios en marketplace Revolico",
+  "details": "Categoría: Alimentos - 23 de 50 productos procesados",
+  "progress": 46
+}
+
+// Research Agent comparando
+{
+  "agentId": "research-prices-001",
+  "status": "working",
+  "action": "Comparando precios de Arroz Guyanes 2Kg con 5 competidores",
+  "details": "Nuestro precio: $2.50 | Competencia: $2.10 - $2.80",
+  "progress": 80
+}
+
+// Sales Agent atendiendo cliente
+{
+  "agentId": "sales-whatsapp-001",
+  "status": "working",
+  "action": "Atendiendo cliente via WhatsApp",
+  "details": "Cliente pregunta por precios de pinturas",
+  "progress": 0
+}
+
+// Sales Agent cerrando venta
+{
+  "agentId": "sales-whatsapp-001",
+  "status": "working",
+  "action": "Cerrando venta - 3 productos, $15.50 USD",
+  "details": "Cliente: Juan Pérez | Arroz x3 + Frijol x5"
+}
+
+// Campaign Agent diseñando
+{
+  "agentId": "campaign-designer-001",
+  "status": "working",
+  "action": "Diseñando campaña Semana de la Ferretería",
+  "details": "Escribiendo script de video - sección: hook",
+  "progress": 30
+}
+
+// Analyst completó análisis
+{
+  "agentId": "analyst-001",
+  "status": "idle",
+  "action": "Análisis de precios completado",
+  "details": "3 sugerencias de precio enviadas al dashboard"
+}
+
+// Agent se desconecta
+{
+  "agentId": "research-prices-001",
+  "status": "offline",
+  "action": "Desconectado - tarea completada"
+}
+```
+
+**Frecuencia recomendada:**
+- Cada 30-60 segundos mientras trabaja
+- Al iniciar y terminar cada tarea
+- Al cambiar de status (working → idle → offline)
+
+**Dashboard en vivo:** `https://mercado.servisumic.com/dashboard/market/marketing-intel/activity`
+- Se actualiza automáticamente cada 10 segundos
+- Muestra: status de cada agente, acción actual, progreso, feed de actividad
+- Un agente se considera "online" si reportó actividad en los últimos 5 minutos
+
+---
+
+## 10. Resumen de Endpoints
 
 | # | Método | Endpoint | Descripción |
 |---|--------|----------|-------------|
@@ -538,7 +651,8 @@ GET /api/marketing-intel/external/agents
 | 6 | POST | `/external/suggestions` | Enviar sugerencias de IA |
 | 7 | POST | `/external/campaigns` | Crear campaña con scripts de venta |
 | 8 | GET | `/external/agents` | Listar agentes registrados |
-| 8 | POST | `/external/agents` | Registrar/actualizar agentes |
+| 9 | POST | `/external/agents` | Registrar/actualizar agentes |
+| 10 | POST | `/external/activity` | **Reportar actividad en tiempo real** |
 
 ---
 
@@ -550,7 +664,9 @@ GET /api/marketing-intel/external/agents
    └─ Cada agente recibe su agentId único para tracking
 
 1. INVESTIGACIÓN (Research Agent: research-prices-001)
+   ├─ POST /external/activity → "Iniciando investigación de precios"
    ├─ GET /external/products → Obtener catálogo completo Servisumic
+   ├─ POST /external/activity → "Escaneando precios en competidor X" (progress: 20)
    ├─ Investigar precios de competidores (web scraping, marketplaces, etc.)
    ├─ POST /external/competitors → Registrar competidores encontrados
    ├─ POST /external/competitor-prices → Enviar batch de precios (auto-matchea + auto-sugiere)
