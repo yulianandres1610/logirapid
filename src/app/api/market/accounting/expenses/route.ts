@@ -237,8 +237,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
 
     // Detectar si es creación en lote (array de expenses con sharedData)
-    // Ensure declaracion jurada columns exist
+    // Ensure columns exist + fix decimal precision to match product prices (4 decimals)
     try {
+      await db.query('ALTER TABLE market_expenses ALTER COLUMN amount TYPE DECIMAL(15,4)')
+      await db.query('ALTER TABLE market_expense_items ALTER COLUMN amount TYPE DECIMAL(15,4)')
       await db.query('ALTER TABLE market_expenses ADD COLUMN IF NOT EXISTS vendor_id VARCHAR(50)')
       await db.query('ALTER TABLE market_expenses ADD COLUMN IF NOT EXISTS license_number VARCHAR(50)')
       await db.query('ALTER TABLE market_expenses ADD COLUMN IF NOT EXISTS vendor_activity VARCHAR(500)')
