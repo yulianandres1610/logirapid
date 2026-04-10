@@ -32,6 +32,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
 import { cn } from '@/lib/utils'
+import { PrintDocumentModal } from '@/components/print/PrintDocumentModal'
 import jsPDF from 'jspdf'
 import JsBarcode from 'jsbarcode'
 import { detectBrandFromHost, brands } from '@/lib/brand-config'
@@ -90,6 +91,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
   const [error, setError] = useState<string | null>(null)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showPrintModal, setShowPrintModal] = useState(false)
 
   useEffect(() => {
     fetchExpense()
@@ -444,7 +446,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => window.print()}
+                  onClick={() => setShowPrintModal(true)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 rounded-xl transition-colors',
                     theme === 'dark'
@@ -931,6 +933,31 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
               )}
             </motion.div>
           </motion.div>
+        )}
+        {expense && (
+          <PrintDocumentModal
+            isOpen={showPrintModal}
+            onClose={() => setShowPrintModal(false)}
+            documentType="purchase_invoice"
+            documentData={{
+              type: 'expense',
+              expenseId: expense.id,
+              description: expense.description,
+              amount: expense.amount,
+              currency: expense.currency,
+              expenseDate: expense.expenseDate,
+              categoryName: expense.categoryName,
+              vendorName: expense.vendorName,
+              vendorId: expense.vendorId,
+              receiptNumber: expense.receiptNumber,
+              items: expense.items || [],
+              createdAt: expense.createdAt
+            }}
+            documentTitle={`Gasto #${expense.id} - ${expense.description}`}
+            sourceType="expense"
+            sourceId={expense.id}
+            onPrintSuccess={() => setShowPrintModal(false)}
+          />
         )}
       </DashboardLayout>
     </ProtectedRoute>

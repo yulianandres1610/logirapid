@@ -13,8 +13,8 @@ interface Suggestion {
   title: string
   type: string
   description: string
-  products: string[]
-  marketData: string
+  products: any[]
+  marketData: any
   status: 'pending' | 'approved' | 'rejected'
   createdAt: string
 }
@@ -165,10 +165,13 @@ export default function SuggestionsPage() {
                       {/* Products */}
                       {s.products && s.products.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
-                          {s.products.map((p, pi) => (
+                          {s.products.map((p: any, pi: number) => (
                             <span key={pi} className={cn('px-2 py-0.5 rounded text-xs',
                               theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600')}>
-                              {p}
+                              {typeof p === 'string' ? p : p.productName || p.name || `Producto ${pi + 1}`}
+                              {p.currentPrice && p.suggestedPrice && (
+                                <span className="ml-1 text-emerald-500">${p.currentPrice} → ${p.suggestedPrice}</span>
+                              )}
                             </span>
                           ))}
                         </div>
@@ -178,7 +181,8 @@ export default function SuggestionsPage() {
                       {s.marketData && (
                         <div className={cn('text-xs px-3 py-2 rounded-lg',
                           theme === 'dark' ? 'bg-gray-900/50 text-gray-400' : 'bg-gray-50 text-gray-500')}>
-                          <TrendingUp className="w-3 h-3 inline mr-1" />{s.marketData}
+                          <TrendingUp className="w-3 h-3 inline mr-1" />
+                          {typeof s.marketData === 'string' ? s.marketData : JSON.stringify(s.marketData)}
                         </div>
                       )}
 
