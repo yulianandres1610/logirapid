@@ -3,8 +3,8 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
-// Use the same model that works for product image generation in gemini.ts
-const IMAGE_MODEL = 'gemini-2.0-flash-exp'
+// Same model used in src/lib/gemini.ts for image generation
+const IMAGE_MODEL = 'gemini-3-pro-image-preview'
 
 interface JWTPayload {
   userId: number
@@ -95,8 +95,8 @@ CRITICAL REQUIREMENTS:
 
     console.log('[Social Image] Generating with Gemini for:', productName, platform)
 
-    // Try multiple models in order
-    const MODELS = [IMAGE_MODEL, 'gemini-2.0-flash', 'gemini-1.5-flash']
+    // Try models that support image generation (responseModalities: IMAGE)
+    const MODELS = [IMAGE_MODEL, 'gemini-2.0-flash-exp']
 
     for (const model of MODELS) {
       try {
