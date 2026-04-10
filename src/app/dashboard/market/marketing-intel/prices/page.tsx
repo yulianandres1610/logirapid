@@ -41,7 +41,12 @@ export default function CompetitorPricesPage() {
     if (search) params.set('search', search)
     fetch(`/api/marketing-intel/competitor-prices?${params}`)
       .then(r => r.json())
-      .then(res => { if (res.success) setData(res.data) })
+      .then(res => {
+        if (res.success) {
+          const arr = Array.isArray(res.data) ? res.data : res.data?.prices || []
+          setData({ prices: arr, total: res.pagination?.total || arr.length })
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [page, search])

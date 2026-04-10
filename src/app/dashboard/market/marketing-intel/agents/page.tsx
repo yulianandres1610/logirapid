@@ -41,7 +41,24 @@ export default function AgentRankingsPage() {
     setLoading(true)
     fetch(`/api/marketing-intel/agent-rankings?period=${period}`)
       .then(r => r.json())
-      .then(res => { if (res.success) setData(res.data) })
+      .then(res => {
+        if (res.success) {
+          const agents = Array.isArray(res.data) ? res.data : res.data?.agents || []
+          const totalRevenue = agents.reduce((s: number, a: any) => s + (a.totalRevenue || a.revenue || 0), 0)
+          const totalSales = agents.reduce((s: number, a: any) => s + (a.totalSales || a.sales || 0), 0)
+          setData({
+            agents: agents.map((a: any) => ({
+              agentId: a.agentId, name: a.name, channel: a.channel,
+              sales: a.totalSales || a.sales || 0,
+              revenue: a.totalRevenue || a.revenue || 0,
+              averageTicket: a.avgOrderValue || a.averageTicket || 0
+            })),
+            period: res.period || period,
+            totalRevenue,
+            totalSales
+          })
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [period])

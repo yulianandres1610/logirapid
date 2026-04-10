@@ -63,7 +63,12 @@ export default function CampaignsPage() {
     setLoading(true)
     fetch('/api/marketing-intel/campaigns')
       .then(r => r.json())
-      .then(res => { if (res.success) setData(res.data) })
+      .then(res => {
+        if (res.success) {
+          const arr = Array.isArray(res.data) ? res.data : res.data?.campaigns || []
+          setData({ campaigns: arr, total: arr.length })
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])

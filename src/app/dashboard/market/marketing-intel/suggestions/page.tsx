@@ -49,7 +49,12 @@ export default function SuggestionsPage() {
     if (filter !== 'all') params.set('status', filter)
     fetch(`/api/marketing-intel/suggestions?${params}`)
       .then(r => r.json())
-      .then(res => { if (res.success) setData(res.data) })
+      .then(res => {
+        if (res.success) {
+          const arr = Array.isArray(res.data) ? res.data : res.data?.suggestions || []
+          setData({ suggestions: arr, total: arr.length })
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [filter])
