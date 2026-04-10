@@ -147,7 +147,14 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
     })
   }
 
-  const downloadDeclaracionJurada = async () => {
+  const [cupRate, setCupRate] = useState(300)
+  useEffect(() => {
+    fetch('/api/market/pos/exchange-rates').then(r => r.json()).then(d => {
+      if (d.success && d.rates?.CUP) setCupRate(d.rates.CUP)
+    }).catch(() => {})
+  }, [])
+
+  const downloadDeclaracionJurada = async (mode: 'usd' | 'cup' = 'usd') => {
     if (!expense) return
     const brandName = detectBrandFromHost(window.location.hostname)
     const brand = brands[brandName]
@@ -241,9 +248,20 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
     doc.text(`No. de Licencia: ${licenseNo}`, mg, y)
     doc.text(`Carnet identidad: ${vendorId}`, mg + cw / 2, y); y += 10
 
+    // Currency helpers
+    const isCUP = mode === 'cup'
+    const cur = isCUP ? 'CUP' : 'USD'
+    const fmtP = (usd: number) => isCUP ? `${Math.round(usd * cupRate).toLocaleString('es-ES')} CUP` : `$${usd.toFixed(2)}`
+
+    // Show rate if CUP
+    if (isCUP) {
+      doc.setFontSize(8); doc.setTextColor(100, 100, 100); doc.setFont('helvetica', 'italic')
+      doc.text(`Tasa de cambio: 1 USD = ${cupRate} CUP`, pw - mg, y - 2, { align: 'right' })
+    }
+
     // Items table
     const colWidths = [12, 75, 25, 30, 35]
-    const headers = ['No', 'Producto/Servicio', 'Cantidad', 'Precio', 'Importe']
+    const headers = ['No', 'Producto/Servicio', 'Cantidad', `Precio ${cur}`, `Importe ${cur}`]
 
     // Table header
     doc.setFillColor(pr[0], pr[1], pr[2])
@@ -267,18 +285,17 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
         doc.text(String(i + 1), tx, y); tx += colWidths[0]
         doc.text(item.description.substring(0, 40), tx, y); tx += colWidths[1]
         doc.text('1', tx + colWidths[2] - 2, y, { align: 'right' }); tx += colWidths[2]
-        doc.text(`$${item.amount.toFixed(2)}`, tx + colWidths[3] - 2, y, { align: 'right' }); tx += colWidths[3]
-        doc.text(`$${item.amount.toFixed(2)}`, tx + colWidths[4] - 2, y, { align: 'right' })
+        doc.text(fmtP(item.amount), tx + colWidths[3] - 2, y, { align: 'right' }); tx += colWidths[3]
+        doc.text(fmtP(item.amount), tx + colWidths[4] - 2, y, { align: 'right' })
         total += item.amount
         y += 7
       })
     } else {
-      // Single item from expense description
       doc.text('1', mg + 2, y)
       doc.text(expense.description.substring(0, 40), mg + 2 + colWidths[0], y)
       doc.text('1', mg + 2 + colWidths[0] + colWidths[1] + colWidths[2] - 2, y, { align: 'right' })
-      doc.text(`$${expense.amount.toFixed(2)}`, mg + 2 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] - 2, y, { align: 'right' })
-      doc.text(`$${expense.amount.toFixed(2)}`, mg + cw - 2, y, { align: 'right' })
+      doc.text(fmtP(expense.amount), mg + 2 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] - 2, y, { align: 'right' })
+      doc.text(fmtP(expense.amount), mg + cw - 2, y, { align: 'right' })
       total = expense.amount
       y += 7
     }
@@ -289,7 +306,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
     doc.setFont('helvetica', 'bold'); doc.setFontSize(11)
     doc.text('Total', mg + 2 + colWidths[0], y)
     doc.setTextColor(pr[0], pr[1], pr[2])
-    doc.text(`$${total.toFixed(2)} ${expense.currency}`, mg + cw - 2, y, { align: 'right' })
+    doc.text(fmtP(total), mg + cw - 2, y, { align: 'right' })
     y += 14
 
     // Legal text
@@ -313,7 +330,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
     doc.setFontSize(7); doc.setTextColor(130, 130, 130)
     doc.text('Documento generado por LogiRapid/Servisumic  |  facturacion@servisumic.com  |  +5363707599', pw / 2, y, { align: 'center' })
 
-    doc.save(`Declaracion-Jurada-GAS-${String(expense.id).padStart(4, '0')}.pdf`)
+    doc.save(`Declaracion-Jurada-GAS-${String(expense.id).padStart(4, '0')}-${mode.toUpperCase()}.pdf`)
 
   }
 
@@ -441,11 +458,20 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={downloadDeclaracionJurada}
-                  className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl transition-colors font-medium"
+                  onClick={() => downloadDeclaracionJurada('usd')}
+                  className="flex items-center gap-2 px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl transition-colors font-medium text-sm"
                 >
                   <Download className="w-4 h-4" />
-                  Declaración Jurada
+                  DJ USD
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => downloadDeclaracionJurada('cup')}
+                  className="flex items-center gap-2 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl transition-colors font-medium text-sm"
+                >
+                  <Download className="w-4 h-4" />
+                  DJ CUP
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.02 }}
