@@ -331,7 +331,7 @@ export default function ProductDetailPage() {
     const priceCUP = Math.round(price * USD_CUP)
 
     try {
-      // Get product image as base64 if available
+      // Get product image as compressed base64
       let productImageBase64 = ''
       if (product.imageUrl) {
         setImageProgress(10)
@@ -339,16 +339,32 @@ export default function ProductDetailPage() {
         try {
           const imgRes = await fetch(product.imageUrl)
           const imgBlob = await imgRes.blob()
+          // Compress to max 800px and 70% quality to keep payload small
           productImageBase64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve((reader.result as string).split(',')[1] || '')
-            reader.readAsDataURL(imgBlob)
+            const img = new window.Image()
+            img.crossOrigin = 'anonymous'
+            img.onload = () => {
+              const canvas = document.createElement('canvas')
+              const maxDim = 800
+              let w = img.width, h = img.height
+              if (w > maxDim || h > maxDim) {
+                if (w > h) { h = Math.round((h / w) * maxDim); w = maxDim }
+                else { w = Math.round((w / h) * maxDim); h = maxDim }
+              }
+              canvas.width = w; canvas.height = h
+              const ctx = canvas.getContext('2d')!
+              ctx.drawImage(img, 0, 0, w, h)
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.7)
+              resolve(dataUrl.split(',')[1] || '')
+            }
+            img.onerror = () => resolve('')
+            img.src = URL.createObjectURL(imgBlob)
           })
         } catch { /* continue without image */ }
       }
 
       setImageProgress(30)
-      setImageProgressText('Gemini está diseñando la imagen...')
+      setImageProgressText('IA generando diseño...')
 
       const res = await fetch('/api/market/products/social-image', {
         method: 'POST',

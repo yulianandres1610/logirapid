@@ -3,7 +3,8 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY
-const IMAGE_MODEL = 'gemini-2.0-flash-preview-image-generation'
+// Use the same model that works for product image generation in gemini.ts
+const IMAGE_MODEL = 'gemini-2.0-flash-exp'
 
 interface JWTPayload {
   userId: number
@@ -88,49 +89,61 @@ STYLE RULES:
 
     console.log('[Social Image] Generating with Gemini for:', productName, platform)
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${GOOGLE_AI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: contents }],
-          generationConfig: {
-            responseModalities: ['IMAGE', 'TEXT']
+    // Try multiple models in order
+    const MODELS = [IMAGE_MODEL, 'gemini-2.0-flash', 'gemini-1.5-flash']
+
+    for (const model of MODELS) {
+      try {
+        console.log(`[Social Image] Trying model: ${model}`)
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GOOGLE_AI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: contents }],
+              generationConfig: {
+                responseModalities: ['IMAGE', 'TEXT']
+              }
+            })
           }
-        })
-      }
-    )
+        )
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('[Social Image] API Error:', response.status, errorText)
-      return NextResponse.json({ success: false, error: 'Error de Gemini API: ' + response.status }, { status: 500 })
-    }
-
-    const data = await response.json()
-
-    // Extract image from response
-    if (data.candidates?.[0]?.content?.parts) {
-      for (const part of data.candidates[0].content.parts) {
-        if (part.inlineData?.data) {
-          console.log('[Social Image] Image generated successfully')
-          return NextResponse.json({
-            success: true,
-            imageBase64: part.inlineData.data,
-            mimeType: part.inlineData.mimeType || 'image/png'
-          })
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error(`[Social Image] ${model} Error:`, response.status, errorText.substring(0, 300))
+          continue // Try next model
         }
+
+        const data = await response.json()
+
+        // Check if blocked
+        if (data.candidates?.[0]?.finishReason === 'SAFETY') {
+          console.log(`[Social Image] ${model} blocked by safety filter`)
+          continue
+        }
+
+        // Extract image from response
+        if (data.candidates?.[0]?.content?.parts) {
+          for (const part of data.candidates[0].content.parts) {
+            if (part.inlineData?.data) {
+              console.log(`[Social Image] Success with model: ${model}`)
+              return NextResponse.json({
+                success: true,
+                imageBase64: part.inlineData.data,
+                mimeType: part.inlineData.mimeType || 'image/png'
+              })
+            }
+          }
+        }
+
+        console.log(`[Social Image] ${model} no image in response`)
+      } catch (modelErr) {
+        console.error(`[Social Image] ${model} exception:`, modelErr instanceof Error ? modelErr.message : modelErr)
       }
     }
 
-    // Check if blocked
-    if (data.candidates?.[0]?.finishReason === 'SAFETY') {
-      return NextResponse.json({ success: false, error: 'Imagen bloqueada por filtro de seguridad' }, { status: 400 })
-    }
-
-    console.log('[Social Image] No image in response:', JSON.stringify(data).substring(0, 500))
-    return NextResponse.json({ success: false, error: 'Gemini no generó imagen' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'No se pudo generar la imagen. Intente de nuevo.' }, { status: 500 })
 
   } catch (error) {
     console.error('[Social Image] Error:', error)
