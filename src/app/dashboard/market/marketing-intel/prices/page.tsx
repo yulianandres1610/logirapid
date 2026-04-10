@@ -44,7 +44,7 @@ export default function CompetitorPricesPage() {
       .then(res => {
         if (res.success) {
           const arr = Array.isArray(res.data) ? res.data : res.data?.prices || []
-          setData({ prices: arr, total: res.pagination?.total || arr.length })
+          setData({ prices: arr, total: res.pagination?.total || arr.length, page: res.pagination?.page || 1, limit: res.pagination?.limit || 50, totalPages: res.pagination?.totalPages || 1 })
         }
       })
       .catch(console.error)
