@@ -246,11 +246,42 @@ export default function CreateInvoicePage() {
   const [downpaymentType, setDownpaymentType] = useState<'percentage' | 'fixed_amount'>('percentage')
   const [downpaymentValue, setDownpaymentValue] = useState<string>('30')
 
-  // Step 4: Payment
+  // Step 4: Payment (multi-currency like POS)
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
   const [paymentCurrency, setPaymentCurrency] = useState<string>('USD')
   const [amountTendered, setAmountTendered] = useState<string>('')
   const [paymentReference, setPaymentReference] = useState<string>('')
+
+  interface WizardPaymentEntry {
+    id: string; method: string; currency: string; amount: number; amountInUSD: number; reference?: string
+  }
+  const [wizardPayments, setWizardPayments] = useState<WizardPaymentEntry[]>([])
+
+  const convertToUSD = (amt: number, cur: string) => {
+    if (cur === 'CUP') return amt / exchangeRate
+    if (cur === 'MLC') return amt / 1.2
+    return amt
+  }
+
+  const wizardTotalPaidUSD = wizardPayments.reduce((s, p) => s + p.amountInUSD, 0)
+
+  const addWizardPayment = () => {
+    const num = parseFloat(amountTendered)
+    if (isNaN(num) || num <= 0) return
+    if (paymentMethod === 'transfer' && !paymentReference.trim()) return
+    setWizardPayments(prev => [...prev, {
+      id: Date.now().toString(),
+      method: paymentMethod,
+      currency: paymentCurrency,
+      amount: num,
+      amountInUSD: convertToUSD(num, paymentCurrency),
+      reference: paymentMethod === 'transfer' ? paymentReference.toUpperCase() : undefined
+    }])
+    setAmountTendered('')
+    setPaymentReference('')
+  }
+
+  const removeWizardPayment = (id: string) => setWizardPayments(prev => prev.filter(p => p.id !== id))
 
   // Step 5: Created invoice
   interface CreatedInvoice {
@@ -1145,12 +1176,26 @@ export default function CreateInvoicePage() {
           wholesaleExchangeRate: exchangeRateWholesale,
           // Quote reference if created from a quote
           fromQuoteId: fromQuoteId || null,
-          // Payment data for immediate payment or downpayment
-          payment: needsPayment ? {
+          // Payment data - multi-currency support
+          payment: needsPayment && wizardPayments.length > 0 ? {
+            method: wizardPayments[0].method,
+            currency: wizardPayments[0].currency,
+            amount: wizardTotalPaidUSD,
+            amountTendered: wizardTotalPaidUSD,
+            reference: wizardPayments[0].reference || null,
+            // Include all payments for the API to process
+            entries: wizardPayments.map(p => ({
+              method: p.method,
+              currency: p.currency,
+              amount: p.amountInUSD,
+              originalAmount: p.amount,
+              reference: p.reference || null
+            }))
+          } : needsPayment ? {
             method: paymentMethod,
             currency: paymentCurrency,
             amount: amountToPay,
-            amountTendered: paymentMethod === 'cash' ? parseFloat(amountTendered || String(amountToPay)) : amountToPay,
+            amountTendered: amountToPay,
             reference: paymentReference || null
           } : null
         })
@@ -2892,137 +2937,107 @@ export default function CreateInvoicePage() {
                         )}
                       </div>
 
-                    {/* Payment Method */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                        Método de Pago
-                      </label>
-                      <div className="grid grid-cols-4 gap-3">
-                        {[
-                          { id: 'cash', label: 'Efectivo', icon: Banknote },
-                          { id: 'transfer', label: 'Transferencia', icon: Smartphone },
-                          { id: 'card', label: 'Tarjeta', icon: CreditCard },
-                          { id: 'credit', label: 'Crédito', icon: User }
-                        ].map(({ id, label, icon: Icon }) => (
-                          <button
-                            key={id}
-                            onClick={() => setPaymentMethod(id)}
-                            className={cn(
-                              'py-4 rounded-xl flex flex-col items-center gap-2 transition-all border-2',
-                              paymentMethod === id
-                                ? 'bg-green-500 text-white border-green-500'
-                                : theme === 'dark'
-                                  ? 'bg-gray-800 border-gray-700 text-gray-300 hover:border-green-500/50'
-                                  : 'bg-white border-gray-200 text-gray-700 hover:border-green-500/50'
-                            )}
-                          >
-                            <Icon className="w-6 h-6" />
-                            <span className="text-sm font-medium">{label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Payment Currency */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                        Moneda de Pago
-                      </label>
-                      <div className="flex gap-3">
-                        {['USD', 'CUP', 'MLC'].map(currency => (
-                          <button
-                            key={currency}
-                            onClick={() => setPaymentCurrency(currency)}
-                            className={cn(
-                              'flex-1 py-3 rounded-xl font-medium transition-all border-2',
-                              paymentCurrency === currency
-                                ? 'bg-green-500 text-white border-green-500'
-                                : theme === 'dark'
-                                  ? 'bg-gray-800 border-gray-700 text-gray-300 hover:border-green-500/50'
-                                  : 'bg-white border-gray-200 text-gray-700 hover:border-green-500/50'
-                            )}
-                          >
-                            {currency}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Amount Tendered (for cash) */}
-                    {paymentMethod === 'cash' && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                          Monto Recibido
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={amountTendered}
-                          onChange={(e) => setAmountTendered(e.target.value)}
-                          placeholder={total.toFixed(2)}
-                          className={cn(
-                            'w-full px-4 py-4 rounded-xl border text-xl font-mono focus:outline-none focus:ring-2',
-                            theme === 'dark'
-                              ? 'bg-gray-900 border-gray-700 text-white focus:border-green-500 focus:ring-green-500/20'
-                              : 'bg-white border-gray-300 text-gray-900 focus:border-green-500 focus:ring-green-500/20'
-                          )}
-                        />
-
-                        {/* Quick amounts */}
-                        <div className="flex gap-2 mt-3">
-                          {[total, Math.ceil(total / 10) * 10, Math.ceil(total / 50) * 50, Math.ceil(total / 100) * 100].filter((v, i, a) => a.indexOf(v) === i).slice(0, 4).map(amount => (
-                            <button
-                              key={amount}
-                              onClick={() => setAmountTendered(amount.toString())}
-                              className={cn(
-                                'flex-1 py-2.5 rounded-xl text-sm font-medium transition-all',
-                                amountTendered === amount.toString()
-                                  ? 'bg-green-500 text-white'
-                                  : theme === 'dark'
-                                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                              )}
-                            >
-                              ${amount.toFixed(2)}
-                              {amount === total && <span className="block text-xs opacity-70">(exacto)</span>}
-                            </button>
-                          ))}
+                    {/* Remaining amount */}
+                    {(() => {
+                      const amountToPay = hasDownpayment
+                        ? (downpaymentType === 'percentage' ? total * parseFloat(downpaymentValue || '0') / 100 : parseFloat(downpaymentValue || '0'))
+                        : total
+                      const remaining = amountToPay - wizardTotalPaidUSD
+                      const remainingCUP = Math.round(remaining * exchangeRate)
+                      const fullyPaid = remaining <= 0.01
+                      return (
+                        <div className={cn('p-4 rounded-xl text-center', fullyPaid ? 'bg-green-50 dark:bg-green-900/20' : 'bg-amber-50 dark:bg-amber-900/20')}>
+                          <p className="text-xs text-gray-500 mb-1">{fullyPaid ? 'Pagado completo' : 'Restante por pagar'}</p>
+                          <p className={cn('text-2xl font-bold', fullyPaid ? 'text-green-600' : 'text-amber-600')}>
+                            {fullyPaid ? 'Completo' : `$${Math.max(0, remaining).toFixed(2)} USD`}
+                          </p>
+                          {!fullyPaid && remainingCUP > 0 && <p className="text-sm text-gray-500">{remainingCUP.toLocaleString('es-ES')} CUP</p>}
                         </div>
+                      )
+                    })()}
 
-                        {/* Change */}
-                        {amountTendered && parseFloat(amountTendered) > total && (
-                          <div className={cn(
-                            'mt-4 p-4 rounded-xl',
-                            theme === 'dark' ? 'bg-green-900/30' : 'bg-green-50'
-                          )}>
-                            <p className="text-sm text-green-600 dark:text-green-400">Cambio</p>
-                            <p className="text-3xl font-bold text-green-600 dark:text-green-400">
-                              ${(parseFloat(amountTendered) - total).toFixed(2)}
-                            </p>
-                          </div>
-                        )}
+                    {/* Currency */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Moneda</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['USD', 'CUP', 'MLC'] as const).map(c => (
+                          <button key={c} onClick={() => setPaymentCurrency(c)}
+                            className={cn('py-2.5 rounded-xl text-sm font-bold transition-all border-2',
+                              paymentCurrency === c ? 'bg-green-500 text-white border-green-500'
+                                : theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-600')}>
+                            {c} {c === 'CUP' ? `(${Math.round(exchangeRate)})` : ''}
+                          </button>
+                        ))}
                       </div>
+                    </div>
+
+                    {/* Method */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Método</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[{ id: 'cash', label: 'Efectivo' }, { id: 'transfer', label: 'Transfer.' }, { id: 'card', label: 'Tarjeta' }].map(m => (
+                          <button key={m.id} onClick={() => setPaymentMethod(m.id)}
+                            className={cn('py-2.5 rounded-xl text-sm font-medium transition-all border-2',
+                              paymentMethod === m.id ? 'bg-blue-500 text-white border-blue-500'
+                                : theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-600')}>
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Amount + Add */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Monto en {paymentCurrency}</label>
+                      <div className="flex gap-2">
+                        <input type="number" step="0.01" value={amountTendered}
+                          onChange={(e) => setAmountTendered(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && addWizardPayment()}
+                          placeholder="Monto"
+                          className={cn('flex-1 px-4 py-3 rounded-xl border text-lg font-bold focus:outline-none focus:ring-2',
+                            theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white focus:ring-green-500/20' : 'bg-white border-gray-200 text-gray-900 focus:ring-green-500/20')} />
+                        <button onClick={addWizardPayment}
+                          disabled={!amountTendered || parseFloat(amountTendered) <= 0}
+                          className="px-4 py-3 bg-green-500 text-white rounded-xl font-bold disabled:opacity-50 hover:bg-green-600 transition-colors">
+                          +
+                        </button>
+                      </div>
+                      {paymentCurrency !== 'USD' && amountTendered && parseFloat(amountTendered) > 0 && (
+                        <p className="text-xs text-gray-400 mt-1">= ${convertToUSD(parseFloat(amountTendered), paymentCurrency).toFixed(2)} USD</p>
+                      )}
+                    </div>
+
+                    {/* Transfer reference */}
+                    {paymentMethod === 'transfer' && (
+                      <input type="text" value={paymentReference}
+                        onChange={(e) => setPaymentReference(e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 13))}
+                        placeholder="Código confirmación (13 caracteres)"
+                        className={cn('w-full px-4 py-3 rounded-xl border font-mono focus:outline-none focus:ring-2',
+                          theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900')} />
                     )}
 
-                    {/* Reference (for transfer) */}
-                    {paymentMethod === 'transfer' && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Referencia de Transferencia <span className="text-gray-400">(opcional)</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={paymentReference}
-                          onChange={(e) => setPaymentReference(e.target.value)}
-                          placeholder="Número de referencia o confirmación"
-                          className={cn(
-                            'w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2',
-                            theme === 'dark'
-                              ? 'bg-gray-900 border-gray-700 text-white focus:border-green-500 focus:ring-green-500/20'
-                              : 'bg-white border-gray-300 text-gray-900 focus:border-green-500 focus:ring-green-500/20'
-                          )}
-                        />
+                    {/* Payment entries list */}
+                    {wizardPayments.length > 0 && (
+                      <div className={cn('rounded-xl border divide-y', theme === 'dark' ? 'border-gray-700 divide-gray-700' : 'border-gray-200 divide-gray-100')}>
+                        {wizardPayments.map(entry => (
+                          <div key={entry.id} className="flex items-center justify-between px-4 py-3">
+                            <div>
+                              <span className="text-sm font-bold">{entry.amount.toLocaleString('es-ES')} {entry.currency}</span>
+                              <span className="text-xs text-gray-400 ml-2">
+                                {entry.method === 'cash' ? 'Efectivo' : entry.method === 'transfer' ? 'Transferencia' : 'Tarjeta'}
+                              </span>
+                              {entry.reference && <span className="text-xs text-blue-400 ml-1">({entry.reference})</span>}
+                              {entry.currency !== 'USD' && <p className="text-xs text-gray-400">= ${entry.amountInUSD.toFixed(2)} USD</p>}
+                            </div>
+                            <button onClick={() => removeWizardPayment(entry.id)} className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30">
+                              <X className="w-4 h-4 text-red-500" />
+                            </button>
+                          </div>
+                        ))}
+                        <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900/50 flex justify-between text-sm font-bold">
+                          <span>Total pagos:</span>
+                          <span className="text-green-600">${wizardTotalPaidUSD.toFixed(2)} USD</span>
+                        </div>
                       </div>
                     )}
                   </>
