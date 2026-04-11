@@ -464,13 +464,31 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     doc.text('TOTAL:', mg + 95, y + 2); doc.text(total, pw - mg - 8, y + 2, { align: 'right' })
     y += 16
 
-    // Payment info
-    if (invoice.amountPaid > 0) {
-      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40)
+    // Payment info with individual payment breakdown
+    if (invoice.amountPaid > 0 && invoice.payments.length > 0) {
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(40, 40, 40)
+      doc.text('Detalle de Pagos:', mg, y); y += 5
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8)
+      for (const p of invoice.payments) {
+        const methodLabel = ({ cash: 'Efectivo', transfer: 'Transferencia', card: 'Tarjeta', check: 'Cheque', zelle: 'Zelle' } as Record<string, string>)[p.paymentMethod] || p.paymentMethod
+        const origNote = p.notes?.match(/Original: (.+?)(\s*\||$)/)?.[1]
+        const amountText = mode === 'cup' ? Math.round(p.amount * cupRate).toLocaleString('es-ES') + ' CUP' : fmtUSD(p.amount)
+        let line = `${p.paymentNumber} · ${methodLabel} · ${amountText}`
+        if (origNote) line += ` (${origNote})`
+        if (p.reference) line += ` · Ref: ${p.reference}`
+        doc.text(line, mg + 4, y); y += 4
+      }
+      y += 3
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold')
       const paid = mode === 'cup' ? Math.round(invoice.amountPaid * cupRate).toLocaleString('es-ES') + ' CUP' : fmtUSD(invoice.amountPaid)
       const due = mode === 'cup' ? Math.round(invoice.amountDue * cupRate).toLocaleString('es-ES') + ' CUP' : fmtUSD(invoice.amountDue)
-      doc.text(`Pagado: ${paid}`, mg + 120, y); y += 5
-      doc.text(`Pendiente: ${due}`, mg + 120, y); y += 10
+      doc.text(`Total Pagado: ${paid}`, mg + 100, y); y += 5
+      if (invoice.amountDue > 0.01) { doc.setTextColor(200, 100, 0); doc.text(`Pendiente: ${due}`, mg + 100, y); y += 5 }
+      y += 5
+    } else if (invoice.amountPaid > 0) {
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40)
+      const paid = mode === 'cup' ? Math.round(invoice.amountPaid * cupRate).toLocaleString('es-ES') + ' CUP' : fmtUSD(invoice.amountPaid)
+      doc.text(`Pagado: ${paid}`, mg + 120, y); y += 10
     }
 
     // Footer
@@ -1634,16 +1652,27 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                             <p className="text-2xl font-bold text-emerald-600">
                               {formatCurrency(payment.amount)}
                             </p>
-                            <p className="text-sm text-gray-500">
+                            {payment.notes && payment.notes.includes('Original:') && (
+                              <p className="text-sm font-medium text-blue-500">
+                                {payment.notes.match(/Original: (.+)/)?.[1]}
+                              </p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-0.5">
                               {formatDate(payment.paymentDate)}
                             </p>
                           </div>
                         </div>
-                        {payment.createdBy && (
-                          <p className="text-sm text-gray-500 mt-3">
-                            Registrado por: {payment.createdBy}
-                          </p>
-                        )}
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                          {payment.createdBy ? (
+                            <p className="text-xs text-gray-400">Por: {payment.createdBy}</p>
+                          ) : <span />}
+                          <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
+                            payment.currency === 'CUP' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                            : payment.currency === 'MLC' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400')}>
+                            {payment.currency || 'USD'}
+                          </span>
+                        </div>
                       </motion.div>
                     ))
                   )}
