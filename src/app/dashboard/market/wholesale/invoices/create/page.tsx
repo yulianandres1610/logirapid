@@ -265,10 +265,12 @@ export default function CreateInvoicePage() {
 
   const wizardTotalPaidUSD = wizardPayments.reduce((s, p) => s + p.amountInUSD, 0)
 
+  const isValidTransferRef = paymentReference.replace(/[^a-zA-Z0-9]/g, '').length === 13
+
   const addWizardPayment = () => {
     const num = parseFloat(amountTendered)
     if (isNaN(num) || num <= 0) return
-    if (paymentMethod === 'transfer' && !paymentReference.trim()) return
+    if (paymentMethod === 'transfer' && !isValidTransferRef) return
     setWizardPayments(prev => [...prev, {
       id: Date.now().toString(),
       method: paymentMethod,
@@ -3036,7 +3038,7 @@ export default function CreateInvoicePage() {
                                     className={cn('flex-1 px-4 py-3 rounded-xl border text-lg font-bold focus:outline-none focus:ring-2',
                                       theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white focus:ring-green-500/20' : 'bg-white border-gray-200 text-gray-900 focus:ring-green-500/20')} />
                                   <button onClick={addWizardPayment}
-                                    disabled={!amountTendered || parseFloat(amountTendered) <= 0}
+                                    disabled={!amountTendered || parseFloat(amountTendered) <= 0 || (paymentMethod === 'transfer' && !isValidTransferRef)}
                                     className="px-5 py-3 bg-green-500 text-white rounded-xl font-bold disabled:opacity-50 hover:bg-green-600 transition-colors text-lg">
                                     +
                                   </button>
@@ -3046,15 +3048,34 @@ export default function CreateInvoicePage() {
                                 )}
                               </div>
 
-                              {/* Transfer reference */}
+                              {/* Transfer reference - 13 chars required */}
                               {paymentMethod === 'transfer' && (
                                 <div>
-                                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Referencia transferencia</label>
-                                  <input type="text" value={paymentReference}
-                                    onChange={(e) => setPaymentReference(e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 13))}
-                                    placeholder="Código confirmación (13 caracteres)"
-                                    className={cn('w-full px-4 py-3 rounded-xl border font-mono focus:outline-none focus:ring-2',
-                                      theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900')} />
+                                  <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                                    Código de confirmación <span className="text-red-500">*</span>
+                                  </label>
+                                  <div className="relative">
+                                    <input type="text" value={paymentReference}
+                                      onChange={(e) => setPaymentReference(e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 13))}
+                                      placeholder="13 caracteres alfanuméricos"
+                                      className={cn('w-full px-4 py-3 rounded-xl border font-mono text-lg tracking-widest focus:outline-none focus:ring-2',
+                                        isValidTransferRef
+                                          ? 'border-green-500 focus:ring-green-500/20'
+                                          : paymentReference.length > 0
+                                            ? 'border-amber-500 focus:ring-amber-500/20'
+                                            : theme === 'dark' ? 'border-gray-700' : 'border-gray-200',
+                                        theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-white text-gray-900')} />
+                                    <span className={cn('absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold',
+                                      isValidTransferRef ? 'text-green-500' : 'text-gray-400')}>
+                                      {paymentReference.length}/13
+                                    </span>
+                                  </div>
+                                  {paymentReference.length > 0 && !isValidTransferRef && (
+                                    <p className="text-xs text-amber-500 mt-1">Faltan {13 - paymentReference.length} caracteres</p>
+                                  )}
+                                  {isValidTransferRef && (
+                                    <p className="text-xs text-green-500 mt-1">✓ Código válido</p>
+                                  )}
                                 </div>
                               )}
                             </>

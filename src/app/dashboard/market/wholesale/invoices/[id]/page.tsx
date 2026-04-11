@@ -288,10 +288,12 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const remainingCUP = Math.round(remainingUSD * rates.CUP)
   const isFullyPaid = remainingUSD <= 0.01
 
+  const isValidRef = payReference.replace(/[^a-zA-Z0-9]/g, '').length === 13
+
   const addPaymentEntry = () => {
     const num = parseFloat(payAmount)
     if (isNaN(num) || num <= 0) return
-    if (payMethod === 'transfer' && !payReference.trim()) return
+    if (payMethod === 'transfer' && !isValidRef) return
 
     const amountInUSD = convertToUSD(num, payCurrency)
     setPaymentEntries([...paymentEntries, {
@@ -1751,7 +1753,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                                 : 'bg-white border-gray-200 text-gray-900 focus:border-emerald-500 focus:ring-emerald-500/20'
                             )} />
                           <button onClick={addPaymentEntry}
-                            disabled={!payAmount || parseFloat(payAmount) <= 0}
+                            disabled={!payAmount || parseFloat(payAmount) <= 0 || (payMethod === 'transfer' && !isValidRef)}
                             className="px-4 py-3 bg-emerald-500 text-white rounded-xl font-bold disabled:opacity-50 hover:bg-emerald-600 transition-colors">
                             <Plus className="w-5 h-5" />
                           </button>
@@ -1763,13 +1765,30 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                         )}
                       </div>
 
-                      {/* Transfer reference */}
+                      {/* Transfer reference - 13 chars required */}
                       {payMethod === 'transfer' && (
-                        <input type="text" value={payReference}
-                          onChange={(e) => setPayReference(e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 13))}
-                          placeholder="Código de confirmación (13 caracteres)"
-                          className={cn('w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 font-mono',
-                            theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-200 text-gray-900')} />
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">
+                            Código de confirmación <span className="text-red-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <input type="text" value={payReference}
+                              onChange={(e) => setPayReference(e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 13))}
+                              placeholder="13 caracteres alfanuméricos"
+                              className={cn('w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 font-mono text-lg tracking-widest',
+                                isValidRef ? 'border-emerald-500 focus:ring-emerald-500/20'
+                                  : payReference.length > 0 ? 'border-amber-500 focus:ring-amber-500/20'
+                                  : theme === 'dark' ? 'border-gray-600' : 'border-gray-200',
+                                theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-900')} />
+                            <span className={cn('absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold',
+                              isValidRef ? 'text-emerald-500' : 'text-gray-400')}>
+                              {payReference.length}/13
+                            </span>
+                          </div>
+                          {payReference.length > 0 && !isValidRef && (
+                            <p className="text-xs text-amber-500 mt-1">Faltan {13 - payReference.length} caracteres</p>
+                          )}
+                        </div>
                       )}
 
                       {/* Payment date */}
