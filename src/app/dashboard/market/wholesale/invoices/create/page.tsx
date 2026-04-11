@@ -2937,81 +2937,131 @@ export default function CreateInvoicePage() {
                         )}
                       </div>
 
-                    {/* Remaining amount */}
+                    {/* Remaining amount display */}
                     {(() => {
-                      const remaining = amountToPay - wizardTotalPaidUSD
+                      const remaining = Math.max(0, amountToPay - wizardTotalPaidUSD)
                       const remainingCUP = Math.round(remaining * exchangeRateWholesale)
                       const fullyPaid = remaining <= 0.01
+
+                      // Quick amounts based on selected currency
+                      const exactInCurrency = paymentCurrency === 'CUP' ? remainingCUP
+                        : paymentCurrency === 'MLC' ? Math.round(remaining * 1.2 * 100) / 100
+                        : Math.round(remaining * 100) / 100
+
                       return (
-                        <div className={cn('p-4 rounded-xl text-center', fullyPaid ? 'bg-green-50 dark:bg-green-900/20' : 'bg-amber-50 dark:bg-amber-900/20')}>
-                          <p className="text-xs text-gray-500 mb-1">{fullyPaid ? 'Pagado completo' : 'Restante por pagar'}</p>
-                          <p className={cn('text-2xl font-bold', fullyPaid ? 'text-green-600' : 'text-amber-600')}>
-                            {fullyPaid ? 'Completo' : `$${Math.max(0, remaining).toFixed(2)} USD`}
-                          </p>
-                          {!fullyPaid && remainingCUP > 0 && <p className="text-sm text-gray-500">{remainingCUP.toLocaleString('es-ES')} CUP</p>}
-                        </div>
+                        <>
+                          <div className={cn('p-5 rounded-2xl text-center', fullyPaid
+                            ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800'
+                            : 'bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800')}>
+                            <p className="text-xs text-gray-500 mb-1">{fullyPaid ? '✓ Pagado completo' : 'Restante por pagar'}</p>
+                            <p className={cn('text-3xl font-bold', fullyPaid ? 'text-green-600' : 'text-amber-600')}>
+                              {fullyPaid ? '¡Completo!' : `$${remaining.toFixed(2)} USD`}
+                            </p>
+                            {!fullyPaid && <p className="text-sm text-gray-500 mt-0.5">{remainingCUP.toLocaleString('es-ES')} CUP</p>}
+                          </div>
+
+                          {!fullyPaid && (
+                            <>
+                              {/* Currency + Method in one row */}
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Moneda</label>
+                                  <div className="flex gap-1.5">
+                                    {(['USD', 'CUP', 'MLC'] as const).map(c => (
+                                      <button key={c} onClick={() => setPaymentCurrency(c)}
+                                        className={cn('flex-1 py-2 rounded-lg text-xs font-bold transition-all border',
+                                          paymentCurrency === c ? 'bg-green-500 text-white border-green-500'
+                                            : theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-600')}>
+                                        {c}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Método</label>
+                                  <div className="flex gap-1.5">
+                                    {[{ id: 'cash', label: 'Efect.' }, { id: 'transfer', label: 'Transf.' }, { id: 'card', label: 'Tarjeta' }].map(m => (
+                                      <button key={m.id} onClick={() => setPaymentMethod(m.id)}
+                                        className={cn('flex-1 py-2 rounded-lg text-xs font-medium transition-all border',
+                                          paymentMethod === m.id ? 'bg-blue-500 text-white border-blue-500'
+                                            : theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-600')}>
+                                        {m.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Quick amount buttons */}
+                              <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1.5">Monto rápido en {paymentCurrency}</label>
+                                <div className="grid grid-cols-3 gap-2 mb-2">
+                                  <button onClick={() => setAmountTendered(String(exactInCurrency))}
+                                    className={cn('py-3 rounded-xl text-sm font-bold transition-all border-2',
+                                      'border-green-500 bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40')}>
+                                    {paymentCurrency === 'CUP' ? remainingCUP.toLocaleString('es-ES') : `$${exactInCurrency}`}
+                                    <span className="block text-[10px] font-normal text-green-600/70">Exacto</span>
+                                  </button>
+                                  {paymentCurrency === 'CUP' ? (
+                                    <>
+                                      <button onClick={() => setAmountTendered(String(Math.ceil(remainingCUP / 1000) * 1000))}
+                                        className={cn('py-3 rounded-xl text-sm font-medium border', theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50')}>
+                                        {(Math.ceil(remainingCUP / 1000) * 1000).toLocaleString('es-ES')}
+                                      </button>
+                                      <button onClick={() => setAmountTendered(String(Math.ceil(remainingCUP / 5000) * 5000))}
+                                        className={cn('py-3 rounded-xl text-sm font-medium border', theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50')}>
+                                        {(Math.ceil(remainingCUP / 5000) * 5000).toLocaleString('es-ES')}
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button onClick={() => setAmountTendered(String(Math.ceil(exactInCurrency / 10) * 10))}
+                                        className={cn('py-3 rounded-xl text-sm font-medium border', theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50')}>
+                                        ${Math.ceil(exactInCurrency / 10) * 10}
+                                      </button>
+                                      <button onClick={() => setAmountTendered(String(Math.ceil(exactInCurrency / 50) * 50))}
+                                        className={cn('py-3 rounded-xl text-sm font-medium border', theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50')}>
+                                        ${Math.ceil(exactInCurrency / 50) * 50}
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+
+                                {/* Manual input */}
+                                <div className="flex gap-2">
+                                  <input type="number" step="0.01" value={amountTendered}
+                                    onChange={(e) => setAmountTendered(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && addWizardPayment()}
+                                    placeholder={`Monto en ${paymentCurrency}`}
+                                    className={cn('flex-1 px-4 py-3 rounded-xl border text-lg font-bold focus:outline-none focus:ring-2',
+                                      theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white focus:ring-green-500/20' : 'bg-white border-gray-200 text-gray-900 focus:ring-green-500/20')} />
+                                  <button onClick={addWizardPayment}
+                                    disabled={!amountTendered || parseFloat(amountTendered) <= 0}
+                                    className="px-5 py-3 bg-green-500 text-white rounded-xl font-bold disabled:opacity-50 hover:bg-green-600 transition-colors text-lg">
+                                    +
+                                  </button>
+                                </div>
+                                {paymentCurrency !== 'USD' && amountTendered && parseFloat(amountTendered) > 0 && (
+                                  <p className="text-xs text-gray-400 mt-1">= ${convertToUSD(parseFloat(amountTendered), paymentCurrency).toFixed(2)} USD</p>
+                                )}
+                              </div>
+
+                              {/* Transfer reference */}
+                              {paymentMethod === 'transfer' && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Referencia transferencia</label>
+                                  <input type="text" value={paymentReference}
+                                    onChange={(e) => setPaymentReference(e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 13))}
+                                    placeholder="Código confirmación (13 caracteres)"
+                                    className={cn('w-full px-4 py-3 rounded-xl border font-mono focus:outline-none focus:ring-2',
+                                      theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900')} />
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </>
                       )
                     })()}
-
-                    {/* Currency */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Moneda</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(['USD', 'CUP', 'MLC'] as const).map(c => (
-                          <button key={c} onClick={() => setPaymentCurrency(c)}
-                            className={cn('py-2.5 rounded-xl text-sm font-bold transition-all border-2',
-                              paymentCurrency === c ? 'bg-green-500 text-white border-green-500'
-                                : theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-600')}>
-                            {c} {c === 'CUP' ? `(${Math.round(exchangeRate)})` : ''}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Method */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Método</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[{ id: 'cash', label: 'Efectivo' }, { id: 'transfer', label: 'Transfer.' }, { id: 'card', label: 'Tarjeta' }].map(m => (
-                          <button key={m.id} onClick={() => setPaymentMethod(m.id)}
-                            className={cn('py-2.5 rounded-xl text-sm font-medium transition-all border-2',
-                              paymentMethod === m.id ? 'bg-blue-500 text-white border-blue-500'
-                                : theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-600')}>
-                            {m.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Amount + Add */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Monto en {paymentCurrency}</label>
-                      <div className="flex gap-2">
-                        <input type="number" step="0.01" value={amountTendered}
-                          onChange={(e) => setAmountTendered(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && addWizardPayment()}
-                          placeholder="Monto"
-                          className={cn('flex-1 px-4 py-3 rounded-xl border text-lg font-bold focus:outline-none focus:ring-2',
-                            theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white focus:ring-green-500/20' : 'bg-white border-gray-200 text-gray-900 focus:ring-green-500/20')} />
-                        <button onClick={addWizardPayment}
-                          disabled={!amountTendered || parseFloat(amountTendered) <= 0}
-                          className="px-4 py-3 bg-green-500 text-white rounded-xl font-bold disabled:opacity-50 hover:bg-green-600 transition-colors">
-                          +
-                        </button>
-                      </div>
-                      {paymentCurrency !== 'USD' && amountTendered && parseFloat(amountTendered) > 0 && (
-                        <p className="text-xs text-gray-400 mt-1">= ${convertToUSD(parseFloat(amountTendered), paymentCurrency).toFixed(2)} USD</p>
-                      )}
-                    </div>
-
-                    {/* Transfer reference */}
-                    {paymentMethod === 'transfer' && (
-                      <input type="text" value={paymentReference}
-                        onChange={(e) => setPaymentReference(e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 13))}
-                        placeholder="Código confirmación (13 caracteres)"
-                        className={cn('w-full px-4 py-3 rounded-xl border font-mono focus:outline-none focus:ring-2',
-                          theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900')} />
-                    )}
 
                     {/* Payment entries list */}
                     {wizardPayments.length > 0 && (
