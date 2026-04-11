@@ -89,6 +89,8 @@ interface FormData {
   sourceQuantity: number       // Cantidad de unidades del producto fuente (ej: 1 saco)
   sourceUnitCost: number       // Costo por unidad del producto fuente (ej: $50 por saco)
   sourceWeightKg: number       // Peso bruto total (solo para calcular porciones)
+  conversionType: 'weight' | 'units'  // Tipo de dosificación
+  sourceUnitsPerPackage: number       // Unidades por paquete (ej: 24 maltas por caja)
 
   // Step 2: Materials
   materials: Material[]
@@ -135,6 +137,8 @@ export default function CreateProductionOrderPage() {
     sourceQuantity: 1,
     sourceUnitCost: 0,
     sourceWeightKg: 0,
+    conversionType: 'weight',
+    sourceUnitsPerPackage: 0,
     materials: [],
     targetProductId: null,
     targetProduct: null,
@@ -277,15 +281,19 @@ export default function CreateProductionOrderPage() {
     if (step === 'source') {
       if (!formData.sourceProductId) newErrors.sourceProduct = 'Seleccione un producto fuente'
       if (!formData.sourceWarehouseId) newErrors.sourceWarehouse = 'Seleccione un almacén'
-      if (formData.sourceWeightKg <= 0) newErrors.sourceWeight = 'Ingrese un peso válido'
+      if (formData.conversionType === 'weight' && formData.sourceWeightKg <= 0) {
+        newErrors.sourceWeight = 'Ingrese un peso válido'
+      }
+      if (formData.conversionType === 'units' && formData.sourceUnitsPerPackage <= 0) {
+        newErrors.sourceUnits = 'Ingrese las unidades por paquete'
+      }
     }
 
     if (step === 'target') {
       if (!formData.targetProductId) newErrors.targetProduct = 'Seleccione un producto final'
       if (!formData.targetWarehouseId) newErrors.targetWarehouse = 'Seleccione un almacén destino'
       if (formData.targetQuantity <= 0) newErrors.targetQuantity = 'Ingrese una cantidad válida'
-      // El peso por porción se calcula automáticamente
-      if (formData.sourceWeightKg > 0 && formData.targetQuantity > 0) {
+      if (formData.conversionType === 'weight' && formData.sourceWeightKg > 0 && formData.targetQuantity > 0) {
         const calculatedWeight = formData.sourceWeightKg / formData.targetQuantity
         if (calculatedWeight <= 0) newErrors.targetQuantity = 'La cantidad no es válida'
       }
@@ -325,11 +333,13 @@ export default function CreateProductionOrderPage() {
           sourceWarehouseId: formData.sourceWarehouseId,
           sourceQuantity: formData.sourceQuantity,
           sourceUnitCost: formData.sourceUnitCost,
-          sourceWeightKg: formData.sourceWeightKg,
+          sourceWeightKg: formData.conversionType === 'weight' ? formData.sourceWeightKg : 0,
+          conversionType: formData.conversionType,
+          sourceUnitsPerPackage: formData.sourceUnitsPerPackage,
           targetProductId: formData.targetProductId,
           targetVariantId: formData.targetVariantId,
           targetWarehouseId: formData.targetWarehouseId,
-          targetPortionWeightKg: formData.targetPortionWeightKg,
+          targetPortionWeightKg: formData.conversionType === 'weight' ? formData.targetPortionWeightKg : 0,
           targetQuantity: formData.targetQuantity,
           materials: formData.materials.map(m => ({
             productId: m.productId,
@@ -390,11 +400,15 @@ export default function CreateProductionOrderPage() {
     }
   }
 
-  // Calculations
-  const expectedTotalWeight = formData.targetPortionWeightKg * formData.targetQuantity
-  const wasteSurplusKg = formData.sourceWeightKg - expectedTotalWeight
-  const wasteSurplusType = wasteSurplusKg > 0.001 ? 'surplus' : wasteSurplusKg < -0.001 ? 'waste' : 'exact'
-  const wasteSurplusPercent = formData.sourceWeightKg > 0 ? (Math.abs(wasteSurplusKg) / formData.sourceWeightKg * 100) : 0
+  // Calculations - conditional on conversion type
+  const isWeightBased = formData.conversionType === 'weight'
+  const expectedTotalWeight = isWeightBased ? formData.targetPortionWeightKg * formData.targetQuantity : 0
+  const wasteSurplusKg = isWeightBased ? formData.sourceWeightKg - expectedTotalWeight : 0
+  const wasteSurplusType = isWeightBased
+    ? (wasteSurplusKg > 0.001 ? 'surplus' : wasteSurplusKg < -0.001 ? 'waste' : 'exact')
+    : 'exact'
+  const wasteSurplusPercent = isWeightBased && formData.sourceWeightKg > 0
+    ? (Math.abs(wasteSurplusKg) / formData.sourceWeightKg * 100) : 0
 
   // Costo basado en CANTIDAD (unidades), no en peso
   const rawMaterialCost = formData.sourceQuantity * formData.sourceUnitCost
@@ -402,10 +416,10 @@ export default function CreateProductionOrderPage() {
   const totalCost = rawMaterialCost + materialsCost + formData.laborCost
   const costPerUnit = formData.targetQuantity > 0 ? totalCost / formData.targetQuantity : 0
 
-  // Calcular porciones máximas posibles basado en peso
-  const maxPortions = formData.targetPortionWeightKg > 0
+  // Calcular porciones máximas posibles basado en peso (solo para peso)
+  const maxPortions = isWeightBased && formData.targetPortionWeightKg > 0
     ? Math.floor(formData.sourceWeightKg / formData.targetPortionWeightKg)
-    : 0
+    : formData.sourceUnitsPerPackage * formData.sourceQuantity
 
   const currentStepIndex = PROGRESS_STEPS.findIndex(s => s.id === currentStep)
   const isConfirmStep = currentStep === 'confirm'
@@ -811,45 +825,83 @@ export default function CreateProductionOrderPage() {
                     </div>
                   </div>
 
-                  {/* Weight Input - Solo para control de porciones */}
+                  {/* Conversion Type Toggle */}
                   <div>
-                    <label className={cn(
-                      'block text-sm font-medium mb-2',
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                    )}>
-                      Peso bruto total (kg)
+                    <label className={cn('block text-sm font-medium mb-2', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                      Tipo de dosificación
                     </label>
-                    <div className="relative">
-                      <Scale className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0"
-                        placeholder="Ej: 40.320"
-                        value={formData.sourceWeightKg || ''}
-                        onChange={(e) => setFormData(prev => ({
-                          ...prev,
-                          sourceWeightKg: parseFloat(e.target.value) || 0
-                        }))}
-                        className={cn(
-                          'w-full pl-10 pr-16 py-4 rounded-xl border text-2xl font-bold focus:outline-none focus:ring-2',
-                          theme === 'dark'
-                            ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20'
-                            : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20',
-                          errors.sourceWeight && 'border-red-500'
-                        )}
-                      />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">
-                        kg
-                      </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, conversionType: 'weight' }))}
+                        className={cn('flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-medium transition-all',
+                          formData.conversionType === 'weight'
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-500'
+                            : theme === 'dark' ? 'border-gray-700 text-gray-400 hover:border-gray-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                        )}>
+                        <Scale className="w-4 h-4" /> Por Peso (Kg)
+                      </button>
+                      <button type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, conversionType: 'units' }))}
+                        className={cn('flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-medium transition-all',
+                          formData.conversionType === 'units'
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-500'
+                            : theme === 'dark' ? 'border-gray-700 text-gray-400 hover:border-gray-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                        )}>
+                        <Package className="w-4 h-4" /> Por Unidades
+                      </button>
                     </div>
-                    {errors.sourceWeight && (
-                      <p className="text-red-500 text-sm mt-1">{errors.sourceWeight}</p>
-                    )}
-                    <p className="text-xs text-gray-500 mt-1">
-                      El peso se usa para calcular la cantidad de porciones posibles
-                    </p>
                   </div>
+
+                  {/* Weight Input - Solo para dosificación por peso */}
+                  {formData.conversionType === 'weight' && (
+                    <div>
+                      <label className={cn('block text-sm font-medium mb-2', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                        Peso bruto total (kg)
+                      </label>
+                      <div className="relative">
+                        <Scale className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input type="number" step="0.001" min="0" placeholder="Ej: 40.320"
+                          value={formData.sourceWeightKg || ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, sourceWeightKg: parseFloat(e.target.value) || 0 }))}
+                          className={cn('w-full pl-10 pr-16 py-4 rounded-xl border text-2xl font-bold focus:outline-none focus:ring-2',
+                            theme === 'dark' ? 'bg-gray-800 border-gray-700 text-white focus:ring-emerald-500/20' : 'bg-white border-gray-200 text-gray-900 focus:ring-emerald-500/20',
+                            errors.sourceWeight && 'border-red-500')} />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">kg</span>
+                      </div>
+                      {errors.sourceWeight && <p className="text-red-500 text-sm mt-1">{errors.sourceWeight}</p>}
+                      <p className="text-xs text-gray-500 mt-1">El peso se usa para calcular la cantidad de porciones posibles</p>
+                    </div>
+                  )}
+
+                  {/* Units Per Package - Solo para dosificación por unidades */}
+                  {formData.conversionType === 'units' && (
+                    <div>
+                      <label className={cn('block text-sm font-medium mb-2', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>
+                        Unidades por paquete
+                      </label>
+                      <div className="relative">
+                        <Package className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input type="number" step="1" min="1" placeholder="Ej: 24 maltas por caja"
+                          value={formData.sourceUnitsPerPackage || ''}
+                          onChange={(e) => {
+                            const units = parseInt(e.target.value) || 0
+                            setFormData(prev => ({
+                              ...prev,
+                              sourceUnitsPerPackage: units,
+                              targetQuantity: units * prev.sourceQuantity
+                            }))
+                          }}
+                          className={cn('w-full pl-10 pr-16 py-4 rounded-xl border text-2xl font-bold focus:outline-none focus:ring-2',
+                            theme === 'dark' ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500/20' : 'bg-white border-gray-200 text-gray-900 focus:ring-blue-500/20',
+                            errors.sourceUnits && 'border-red-500')} />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">uds</span>
+                      </div>
+                      {errors.sourceUnits && <p className="text-red-500 text-sm mt-1">{errors.sourceUnits}</p>}
+                      <p className="text-xs text-gray-500 mt-1">
+                        Cantidad de unidades individuales que contiene cada paquete (ej: caja de 24 → 24)
+                      </p>
+                    </div>
+                  )}
 
                   {/* Cost Summary - basado en CANTIDAD, no peso */}
                   {formData.sourceQuantity > 0 && formData.sourceUnitCost > 0 && (

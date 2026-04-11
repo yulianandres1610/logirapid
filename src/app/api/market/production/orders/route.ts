@@ -313,22 +313,34 @@ export async function POST(request: NextRequest) {
       targetQuantity,
       materials,
       laborCost,
-      notes
+      notes,
+      conversionType: rawConversionType,
+      sourceUnitsPerPackage
     } = body
 
-    // Validations
-    if (!sourceProductId || !sourceWarehouseId || !sourceWeightKg) {
-      return NextResponse.json({
-        success: false,
-        error: 'Datos del producto fuente requeridos'
-      }, { status: 400 })
+    const conversionType = rawConversionType || 'weight'
+
+    // Ensure conversion_type column exists
+    try {
+      await db.query('ALTER TABLE market_production_orders ADD COLUMN IF NOT EXISTS conversion_type VARCHAR(20) DEFAULT \'weight\'')
+      await db.query('ALTER TABLE market_production_orders ADD COLUMN IF NOT EXISTS source_units_per_package INTEGER DEFAULT 0')
+    } catch { /* ignore */ }
+
+    // Validations - conditional on conversion type
+    if (!sourceProductId || !sourceWarehouseId) {
+      return NextResponse.json({ success: false, error: 'Datos del producto fuente requeridos' }, { status: 400 })
     }
 
-    if (!targetProductId || !targetWarehouseId || !targetPortionWeightKg || !targetQuantity) {
-      return NextResponse.json({
-        success: false,
-        error: 'Datos del producto final requeridos'
-      }, { status: 400 })
+    if (conversionType === 'weight' && !sourceWeightKg) {
+      return NextResponse.json({ success: false, error: 'El peso es requerido para dosificación por peso' }, { status: 400 })
+    }
+
+    if (!targetProductId || !targetWarehouseId || !targetQuantity) {
+      return NextResponse.json({ success: false, error: 'Datos del producto final requeridos' }, { status: 400 })
+    }
+
+    if (conversionType === 'weight' && !targetPortionWeightKg) {
+      return NextResponse.json({ success: false, error: 'El peso por porción es requerido' }, { status: 400 })
     }
 
     // Get source product cost if not provided
@@ -348,11 +360,13 @@ export async function POST(request: NextRequest) {
       finalSourceUnitCost = parseFloat(sourceProductResult.rows[0].cost_price) || 0
     }
 
-    // Calculate expected values
-    const expectedTotalWeight = targetPortionWeightKg * targetQuantity
-    const wasteSurplusKg = sourceWeightKg - expectedTotalWeight
-    const wasteSurplusType = wasteSurplusKg > 0.001 ? 'surplus' :
-                            wasteSurplusKg < -0.001 ? 'waste' : 'exact'
+    // Calculate expected values - conditional on type
+    const safeSourceWeight = sourceWeightKg || 0
+    const safePortionWeight = targetPortionWeightKg || 0
+    const expectedTotalWeight = conversionType === 'weight' ? safePortionWeight * targetQuantity : 0
+    const wasteSurplusKg = conversionType === 'weight' ? safeSourceWeight - expectedTotalWeight : 0
+    const wasteSurplusType = conversionType === 'units' ? 'exact'
+      : (wasteSurplusKg > 0.001 ? 'surplus' : wasteSurplusKg < -0.001 ? 'waste' : 'exact')
 
     // Calculate costs - basado en CANTIDAD (unidades), NO en peso
     const rawMaterialCost = sourceQuantity * finalSourceUnitCost
@@ -376,6 +390,7 @@ export async function POST(request: NextRequest) {
           target_product_id, target_variant_id, target_warehouse_id,
           target_portion_weight_kg, target_quantity,
           expected_total_weight_kg, waste_surplus_kg, waste_surplus_type,
+          conversion_type, source_units_per_package,
           materials_cost, labor_cost, total_cost, cost_per_unit,
           created_by, created_at, notes
         ) VALUES (
@@ -385,17 +400,19 @@ export async function POST(request: NextRequest) {
           $9, $10, $11,
           $12, $13,
           $14, $15, $16,
-          $17, $18, $19, $20,
-          $21, NOW(), $22
+          $17, $18,
+          $19, $20, $21, $22,
+          $23, NOW(), $24
         )
         RETURNING id
       `, [
         companyId, orderNumber,
         sourceProductId, sourceVariantId || null, sourceWarehouseId,
-        sourceQuantity, finalSourceUnitCost, sourceWeightKg,
+        sourceQuantity, finalSourceUnitCost, safeSourceWeight,
         targetProductId, targetVariantId || null, targetWarehouseId,
-        targetPortionWeightKg, targetQuantity,
+        safePortionWeight, targetQuantity,
         expectedTotalWeight, wasteSurplusKg, wasteSurplusType,
+        conversionType, sourceUnitsPerPackage || 0,
         0, // materials_cost - will update after adding materials
         laborCost || 0,
         0, // total_cost - will update
