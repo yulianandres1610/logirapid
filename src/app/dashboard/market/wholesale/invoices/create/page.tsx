@@ -258,7 +258,7 @@ export default function CreateInvoicePage() {
   const [wizardPayments, setWizardPayments] = useState<WizardPaymentEntry[]>([])
 
   const convertToUSD = (amt: number, cur: string) => {
-    if (cur === 'CUP') return amt / exchangeRate
+    if (cur === 'CUP') return amt / exchangeRateWholesale
     if (cur === 'MLC') return amt / 1.2
     return amt
   }
@@ -2939,11 +2939,8 @@ export default function CreateInvoicePage() {
 
                     {/* Remaining amount */}
                     {(() => {
-                      const amountToPay = hasDownpayment
-                        ? (downpaymentType === 'percentage' ? total * parseFloat(downpaymentValue || '0') / 100 : parseFloat(downpaymentValue || '0'))
-                        : total
                       const remaining = amountToPay - wizardTotalPaidUSD
-                      const remainingCUP = Math.round(remaining * exchangeRate)
+                      const remainingCUP = Math.round(remaining * exchangeRateWholesale)
                       const fullyPaid = remaining <= 0.01
                       return (
                         <div className={cn('p-4 rounded-xl text-center', fullyPaid ? 'bg-green-50 dark:bg-green-900/20' : 'bg-amber-50 dark:bg-amber-900/20')}>
