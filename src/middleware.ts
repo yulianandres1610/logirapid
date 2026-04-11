@@ -158,7 +158,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
-    // Allow market API routes (including consignments, purchases, order-invoices, uploads, migrations, ai, print, debug, users, audit, marketing-intel)
+    // Allow market API routes (including consignments, purchases, order-invoices, uploads, migrations, ai, print, debug, users, audit)
     if (pathname.startsWith('/api/market') ||
         pathname.startsWith('/api/auth') ||
         pathname.startsWith('/api/public') ||
@@ -173,7 +173,7 @@ export async function middleware(request: NextRequest) {
         pathname.startsWith('/api/audit') ||
         pathname.startsWith('/api/companies') ||
         pathname.startsWith('/api/webhooks') ||
-        pathname.startsWith('/api/marketing-intel') ||
+
         pathname.startsWith('/api/apps')) {
       return NextResponse.next()
     }
@@ -347,7 +347,7 @@ export async function middleware(request: NextRequest) {
         pathname.startsWith('/api/audit') ||
         pathname.startsWith('/api/companies') ||
         pathname.startsWith('/api/webhooks') ||
-        pathname.startsWith('/api/marketing-intel') ||
+
         pathname.startsWith('/api/apps')) {
       return NextResponse.next()
     }
