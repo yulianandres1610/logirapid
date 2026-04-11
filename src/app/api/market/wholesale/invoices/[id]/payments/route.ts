@@ -109,29 +109,26 @@ export async function POST(
     const invoiceId = parseInt(id)
     const body = await request.json()
 
-    const {
-      amount,
-      paymentMethod,
-      currency,
-      originalAmount,
-      reference,
-      paymentDate,
-      notes
-    } = body
+    // Support batch payments (array) or single payment
+    const payments: Array<{ amount: number; paymentMethod: string; currency?: string; originalAmount?: number; reference?: string; notes?: string }> = []
 
-    if (!amount || amount <= 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'El monto del pago debe ser mayor a cero'
-      }, { status: 400 })
+    if (Array.isArray(body.payments) && body.payments.length > 0) {
+      // Batch mode: { payments: [...], paymentDate }
+      for (const p of body.payments) {
+        if (p.amount > 0 && p.paymentMethod) {
+          payments.push(p)
+        }
+      }
+    } else if (body.amount && body.paymentMethod) {
+      // Single mode (legacy)
+      payments.push(body)
     }
 
-    if (!paymentMethod) {
-      return NextResponse.json({
-        success: false,
-        error: 'El método de pago es requerido'
-      }, { status: 400 })
+    if (payments.length === 0) {
+      return NextResponse.json({ success: false, error: 'Al menos un pago válido es requerido' }, { status: 400 })
     }
+
+    const paymentDate = body.paymentDate || new Date().toISOString().split('T')[0]
 
     // Verify invoice exists and get current amounts
     const invoiceResult = await db.query(`
@@ -163,101 +160,97 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Ensure all columns exist
+    // Ensure columns exist
     try {
-      await db.query(`ALTER TABLE market_invoice_payments ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'USD'`)
       await db.query(`ALTER TABLE market_invoice_payments ADD COLUMN IF NOT EXISTS payment_date DATE DEFAULT CURRENT_DATE`)
       await db.query(`ALTER TABLE market_invoice_payments ADD COLUMN IF NOT EXISTS notes TEXT`)
       await db.query(`ALTER TABLE market_invoice_payments ADD COLUMN IF NOT EXISTS created_by INTEGER`)
     } catch { /* ignore */ }
 
+    // Calculate total of all payments in USD
+    const totalPaymentUSD = payments.reduce((s, p) => s + (parseFloat(String(p.amount)) || 0), 0)
     const amountDue = parseFloat(invoice.amount_due) || 0
-    const safeAmount = parseFloat(String(amount)) || 0
-    // Allow 5% tolerance for exchange rate rounding
-    const tolerance = amountDue * 0.05
-    const effectiveAmount = Math.min(safeAmount, amountDue)
-    if (safeAmount > amountDue + tolerance) {
+    const tolerance = amountDue * 0.10 // 10% tolerance for multi-currency rounding
+
+    if (totalPaymentUSD > amountDue + tolerance) {
       return NextResponse.json({
         success: false,
-        error: `El monto del pago ($${safeAmount.toFixed(2)}) excede el saldo pendiente ($${amountDue.toFixed(2)})`
+        error: `El total de pagos ($${totalPaymentUSD.toFixed(2)}) excede el saldo pendiente ($${amountDue.toFixed(2)})`
       }, { status: 400 })
     }
 
-    // Generate payment number: PAG-2025-0001
+    // Get next payment number
     const year = new Date().getFullYear()
-    const numberResult = await db.query(`
-      SELECT payment_number FROM market_invoice_payments
-      WHERE payment_number LIKE $1
-      ORDER BY id DESC
-      LIMIT 1
-    `, [`PAG-${year}-%`])
-
+    const numberResult = await db.query(
+      `SELECT payment_number FROM market_invoice_payments WHERE payment_number LIKE $1 ORDER BY id DESC LIMIT 1`,
+      [`PAG-${year}-%`]
+    )
     let nextNumber = 1
     if (numberResult.rows.length > 0) {
-      const lastNumber = numberResult.rows[0].payment_number
-      const match = lastNumber.match(/PAG-\d{4}-(\d+)/)
-      if (match) {
-        nextNumber = parseInt(match[1]) + 1
-      }
+      const match = numberResult.rows[0].payment_number.match(/PAG-\d{4}-(\d+)/)
+      if (match) nextNumber = parseInt(match[1]) + 1
     }
-    const paymentNumber = `PAG-${year}-${String(nextNumber).padStart(4, '0')}`
 
-    // Build notes
-    const paymentNotes = [
-      notes,
-      currency && currency !== 'USD' && originalAmount ? `Original: ${originalAmount} ${currency}` : null
-    ].filter(Boolean).join(' | ') || null
-
-    const currentPaid = parseFloat(invoice.amount_paid) || 0
+    // Process all payments sequentially
+    let totalRegistered = 0
+    const registeredPayments: string[] = []
+    let runningPaid = parseFloat(invoice.amount_paid) || 0
     const totalAmount = parseFloat(invoice.total_amount) || 0
-    const newAmountPaid = Math.round((currentPaid + effectiveAmount) * 10000) / 10000
-    const newAmountDue = Math.max(0, Math.round((totalAmount - newAmountPaid) * 10000) / 10000)
-    const isPaid = newAmountDue <= 0.01
 
-    console.log('[Payment] Processing:', { invoiceId, safeAmount, effectiveAmount, currentPaid, newAmountPaid, newAmountDue, isPaid })
+    for (const p of payments) {
+      const pAmount = parseFloat(String(p.amount)) || 0
+      if (pAmount <= 0) continue
 
-    // Insert payment
-    await db.query(`
-      INSERT INTO market_invoice_payments (
-        invoice_id, payment_number, amount, payment_method, reference, payment_date, notes, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    `, [
-      invoiceId, paymentNumber, effectiveAmount, paymentMethod,
-      reference || null, paymentDate || new Date().toISOString().split('T')[0],
-      paymentNotes, payload.userId
-    ])
+      const effectiveAmount = Math.min(pAmount, Math.max(0, totalAmount - runningPaid))
+      if (effectiveAmount <= 0) continue
 
-    // Update invoice
+      const paymentNumber = `PAG-${year}-${String(nextNumber).padStart(4, '0')}`
+      nextNumber++
+
+      // Build notes with original currency
+      const payNotes = [
+        p.notes,
+        p.currency && p.currency !== 'USD' && p.originalAmount ? `Original: ${p.originalAmount} ${p.currency}` : null
+      ].filter(Boolean).join(' | ') || null
+
+      await db.query(`
+        INSERT INTO market_invoice_payments (invoice_id, payment_number, amount, payment_method, reference, payment_date, notes, created_by)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `, [invoiceId, paymentNumber, effectiveAmount, p.paymentMethod, p.reference || null, paymentDate, payNotes, payload.userId])
+
+      runningPaid += effectiveAmount
+      totalRegistered += effectiveAmount
+      registeredPayments.push(paymentNumber)
+    }
+
+    // Update invoice once with final totals
+    const finalAmountDue = Math.max(0, Math.round((totalAmount - runningPaid) * 10000) / 10000)
+    const isPaid = finalAmountDue <= 0.01
+
     if (isPaid) {
-      await db.query(`
-        UPDATE market_invoices SET amount_paid = $1, amount_due = $2, payment_status = 'paid', paid_at = NOW(), updated_at = NOW()
-        WHERE id = $3
-      `, [newAmountPaid, newAmountDue, invoiceId])
+      await db.query(`UPDATE market_invoices SET amount_paid = $1, amount_due = $2, payment_status = 'paid', paid_at = NOW(), updated_at = NOW() WHERE id = $3`,
+        [runningPaid, finalAmountDue, invoiceId])
     } else {
-      await db.query(`
-        UPDATE market_invoices SET amount_paid = $1, amount_due = $2, payment_status = 'partial', updated_at = NOW()
-        WHERE id = $3
-      `, [newAmountPaid, newAmountDue, invoiceId])
+      await db.query(`UPDATE market_invoices SET amount_paid = $1, amount_due = $2, payment_status = 'partial', updated_at = NOW() WHERE id = $3`,
+        [runningPaid, finalAmountDue, invoiceId])
     }
 
-    // Update customer balance
+    // Update customer balance once
     try {
-      await db.query(`
-        UPDATE market_wholesale_customers SET current_balance = COALESCE(current_balance, 0) - $1, updated_at = NOW()
-        WHERE id = $2
-      `, [effectiveAmount, invoice.customer_id])
-    } catch (balErr) {
-      console.log('[Payment] Customer balance update skipped:', balErr instanceof Error ? balErr.message : balErr)
-    }
+      await db.query(`UPDATE market_wholesale_customers SET current_balance = COALESCE(current_balance, 0) - $1, updated_at = NOW() WHERE id = $2`,
+        [totalRegistered, invoice.customer_id])
+    } catch { /* ignore */ }
+
+    console.log('[Payment] Registered:', { invoiceId, payments: registeredPayments.length, totalRegistered, isPaid, finalAmountDue })
 
     return NextResponse.json({
       success: true,
-      message: `Pago ${paymentNumber} registrado exitosamente`,
+      message: `${registeredPayments.length} pago(s) registrado(s)`,
       data: {
-        paymentNumber,
-        amount: effectiveAmount,
-        currency: currency || 'USD',
-        newAmountDue: Math.max(0, amountDue - effectiveAmount)
+        paymentNumbers: registeredPayments,
+        totalRegistered,
+        isPaid,
+        newAmountDue: finalAmountDue
       }
     })
 

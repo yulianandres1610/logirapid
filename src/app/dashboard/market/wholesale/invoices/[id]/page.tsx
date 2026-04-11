@@ -535,39 +535,36 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     if (paymentEntries.length === 0) return
     setSavingPayment(true)
     try {
-      // Register each payment entry
-      let allOk = true
-      for (const entry of paymentEntries) {
-        const response = await fetch(`/api/market/wholesale/invoices/${invoiceId}/payments`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+      // Send ALL payments in a single request (batch)
+      const response = await fetch(`/api/market/wholesale/invoices/${invoiceId}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payments: paymentEntries.map(entry => ({
             amount: entry.amountInUSD,
             paymentMethod: entry.method,
             currency: entry.currency,
             originalAmount: entry.amount,
             reference: entry.reference || null,
-            paymentDate: payDate,
             notes: entry.currency !== 'USD' ? `${entry.amount} ${entry.currency} @ ${entry.currency === 'CUP' ? rates.CUP : rates.MLC}` : null
-          })
+          })),
+          paymentDate: payDate
         })
-        if (!response.ok) {
-          const err = await response.json()
-          alert(err.error || 'Error al registrar pago')
-          allOk = false
-          break
-        }
-      }
+      })
 
-      if (allOk) {
+      const result = await response.json()
+      if (response.ok && result.success) {
         setShowPaymentModal(false)
         setPaymentEntries([])
         setPayAmount('')
         setPayReference('')
         fetchInvoice()
+      } else {
+        alert(result.error || 'Error al registrar pagos')
       }
     } catch (error) {
       console.error('Error registering payment:', error)
+      alert('Error de conexión')
     } finally {
       setSavingPayment(false)
     }
