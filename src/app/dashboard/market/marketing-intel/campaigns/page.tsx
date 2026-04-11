@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Zap, Loader2, Plus, X, Calendar, Percent, Tag, Clock, CheckCircle, PauseCircle, XCircle, AlertCircle } from 'lucide-react'
+import { Zap, Loader2, Plus, X, Calendar, Percent, Tag, Clock, CheckCircle, PauseCircle, XCircle, AlertCircle, ArrowRight } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
@@ -45,6 +46,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 export default function CampaignsPage() {
   const { theme } = useTheme()
+  const router = useRouter()
   const [data, setData] = useState<CampaignsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -146,8 +148,9 @@ export default function CampaignsPage() {
                 return (
                   <motion.div key={c.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
-                    className={cn('p-5 rounded-xl border flex flex-col gap-3',
-                      theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                    onClick={() => router.push(`/dashboard/market/marketing-intel/campaigns/${c.id}`)}
+                    className={cn('p-5 rounded-xl border flex flex-col gap-3 cursor-pointer hover:shadow-lg transition-shadow',
+                      theme === 'dark' ? 'bg-gray-800 border-gray-700 hover:border-gray-600' : 'bg-white border-gray-200 hover:border-gray-300')}>
                     {/* Status + Type */}
                     <div className="flex items-center justify-between">
                       <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1',
@@ -191,12 +194,15 @@ export default function CampaignsPage() {
                       <span>{formatDate(c.startDate)} - {formatDate(c.endDate)}</span>
                     </div>
 
-                    {/* Products count */}
-                    {c.productsCount > 0 && (
-                      <p className="text-xs text-gray-500">
-                        {c.productsCount} producto{c.productsCount !== 1 ? 's' : ''} incluido{c.productsCount !== 1 ? 's' : ''}
-                      </p>
-                    )}
+                    {/* Products count + view link */}
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
+                      {c.productsCount > 0 ? (
+                        <p className="text-xs text-gray-500">{c.productsCount} producto{c.productsCount !== 1 ? 's' : ''}</p>
+                      ) : <span />}
+                      <span className="text-xs font-medium text-orange-500 flex items-center gap-1">
+                        Ver detalle <ArrowRight className="w-3 h-3" />
+                      </span>
+                    </div>
                   </motion.div>
                 )
               })}

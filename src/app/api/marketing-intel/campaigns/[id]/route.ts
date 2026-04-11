@@ -71,19 +71,19 @@ export async function GET(
 
     const c = campaignResult.rows[0]
 
-    // Get tasks
+    // Get tasks (campaign_id is enough - campaign already verified by company)
     const tasksResult = await db.query(`
       SELECT * FROM mi_campaign_tasks
-      WHERE campaign_id = $1 AND company_id = $2
+      WHERE campaign_id = $1
       ORDER BY sort_order ASC, id ASC
-    `, [id, payload.companyId])
+    `, [id])
 
     // Get assets
     const assetsResult = await db.query(`
       SELECT * FROM mi_campaign_assets
-      WHERE campaign_id = $1 AND company_id = $2
+      WHERE campaign_id = $1
       ORDER BY created_at DESC
-    `, [id, payload.companyId])
+    `, [id])
 
     // Parse sales scripts from metrics if present
     let salesScripts = null
