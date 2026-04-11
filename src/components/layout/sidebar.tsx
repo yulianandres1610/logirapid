@@ -704,6 +704,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: BarChart3, label: "Dashboard", href: "/dashboard/market/marketing-intel" },
         { icon: TrendingUp, label: "Actividad en Vivo", href: "/dashboard/market/marketing-intel/activity" },
         { icon: Tag, label: "Precios Competencia", href: "/dashboard/market/marketing-intel/prices" },
+        { icon: Users, label: "Canales", href: "/dashboard/market/marketing-intel/channels" },
         { icon: CreditCard, label: "Campañas", href: "/dashboard/market/marketing-intel/campaigns" },
         { icon: Users, label: "Agentes de Venta", href: "/dashboard/market/marketing-intel/agents" },
         { icon: FileCheck, label: "Sugerencias IA", href: "/dashboard/market/marketing-intel/suggestions" },

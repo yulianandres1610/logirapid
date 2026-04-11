@@ -162,10 +162,69 @@ export async function GET() {
       )
     `)
 
+    // Channels (social media groups, WhatsApp groups, Telegram, etc.)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS mi_channels (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL,
+        platform VARCHAR(30) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        identifier VARCHAR(500),
+        description TEXT,
+        member_count INTEGER DEFAULT 0,
+        assigned_agent_id VARCHAR(100),
+        channel_type VARCHAR(20) DEFAULT 'research',
+        status VARCHAR(20) DEFAULT 'active',
+        last_scraped_at TIMESTAMP,
+        posts_count INTEGER DEFAULT 0,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+
+    // Campaign tasks (checklist)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS mi_campaign_tasks (
+        id SERIAL PRIMARY KEY,
+        campaign_id INTEGER NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        assigned_to VARCHAR(100) DEFAULT 'team',
+        status VARCHAR(20) DEFAULT 'pending',
+        sort_order INTEGER DEFAULT 0,
+        completed_at TIMESTAMP,
+        completed_by INTEGER,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+
+    // Campaign assets (videos, images, documents)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS mi_campaign_assets (
+        id SERIAL PRIMARY KEY,
+        campaign_id INTEGER NOT NULL,
+        type VARCHAR(30) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        file_url TEXT NOT NULL,
+        file_size INTEGER,
+        platform VARCHAR(30),
+        notes TEXT,
+        uploaded_by INTEGER,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `)
+
+    // Add match_type to competitor prices
+    try {
+      await db.query("ALTER TABLE mi_competitor_prices ADD COLUMN IF NOT EXISTS match_type VARCHAR(20) DEFAULT 'exact'")
+      await db.query("ALTER TABLE mi_campaigns ADD COLUMN IF NOT EXISTS sales_scripts JSONB DEFAULT '{}'")
+    } catch { /* ignore */ }
+
     return NextResponse.json({
       success: true,
       message: 'Marketing Intelligence tables created successfully',
-      tables: ['mi_api_keys', 'mi_competitors', 'mi_competitor_prices', 'mi_campaigns', 'mi_sales_agents', 'mi_agent_sales', 'mi_suggestions']
+      tables: ['mi_api_keys', 'mi_competitors', 'mi_competitor_prices', 'mi_campaigns', 'mi_sales_agents', 'mi_agent_sales', 'mi_suggestions', 'mi_channels', 'mi_campaign_tasks', 'mi_campaign_assets']
     })
   } catch (error) {
     console.error('[MI Migration] Error:', error)

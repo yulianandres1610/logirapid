@@ -83,10 +83,39 @@ export async function POST(request: NextRequest) {
       suggestionReason || null
     ])
 
+    const campaignId = result.rows[0].id
+
+    // Auto-generate standard campaign tasks
+    try {
+      await db.query(`CREATE TABLE IF NOT EXISTS mi_campaign_tasks (
+        id SERIAL PRIMARY KEY, campaign_id INTEGER NOT NULL, title VARCHAR(255) NOT NULL,
+        description TEXT, assigned_to VARCHAR(100) DEFAULT 'team', status VARCHAR(20) DEFAULT 'pending',
+        sort_order INTEGER DEFAULT 0, completed_at TIMESTAMP, completed_by INTEGER, created_at TIMESTAMP DEFAULT NOW())`)
+
+      const defaultTasks = [
+        { title: 'Grabar video promocional', description: 'Ver script de video en tab Scripts', assigned: 'team', order: 1 },
+        { title: 'Diseñar imagen para Facebook', description: 'Formato 940x788 con branding Servisumic', assigned: 'team', order: 2 },
+        { title: 'Diseñar imagen para Instagram', description: 'Formato 1080x1350 con branding Servisumic', assigned: 'team', order: 3 },
+        { title: 'Preparar stories', description: 'Stories verticales para Instagram y WhatsApp', assigned: 'team', order: 4 },
+        { title: 'Revisar y aprobar textos', description: 'Verificar copys de todas las plataformas', assigned: 'team', order: 5 },
+        { title: 'Subir materiales al sistema', description: 'Videos, imágenes y documentos en tab Materiales', assigned: 'team', order: 6 },
+        { title: 'Publicar en canales asignados', description: 'Los agentes publicarán automáticamente', assigned: 'openclaw', order: 7 },
+      ]
+
+      for (const task of defaultTasks) {
+        await db.query(`
+          INSERT INTO mi_campaign_tasks (campaign_id, title, description, assigned_to, sort_order)
+          VALUES ($1, $2, $3, $4, $5)
+        `, [campaignId, task.title, task.description, task.assigned, task.order])
+      }
+    } catch (taskErr) {
+      console.log('[MI Campaigns] Auto-task generation skipped:', taskErr instanceof Error ? taskErr.message : taskErr)
+    }
+
     return NextResponse.json({
       success: true,
-      data: { id: result.rows[0].id, name, type },
-      message: 'Campaña creada con scripts de venta'
+      data: { id: campaignId, name, type, tasksGenerated: 7 },
+      message: 'Campaña creada con scripts de venta y 7 tareas automáticas'
     })
   } catch (error) {
     console.error('[MI External Campaigns] Error:', error)

@@ -28,27 +28,56 @@ export async function POST(request: NextRequest) {
     for (const price of prices) {
       if (!price.productName || !price.competitorPrice) continue
 
-      // Try to match product by name or SKU (fuzzy)
+      // Try to match product with strict classification
       let productId: number | null = null
       let ourPrice: number | null = null
+      let matchType: 'exact' | 'similar' | 'uncertain' = 'uncertain'
 
-      const matchResult = await db.query(`
-        SELECT id, selling_price FROM market_products
-        WHERE company_id = $1 AND is_active = true
-          AND (name ILIKE $2 OR sku ILIKE $3 OR barcode = $4)
-        LIMIT 1
-      `, [
-        auth.companyId,
-        `%${price.productName}%`,
-        `%${price.productSku || price.productName}%`,
-        price.productSku || ''
-      ])
-
-      if (matchResult.rows.length > 0) {
-        productId = matchResult.rows[0].id
-        ourPrice = parseFloat(matchResult.rows[0].selling_price) || null
-        matched++
+      // 1. Try exact match by barcode
+      if (price.productSku) {
+        const exactMatch = await db.query(
+          `SELECT id, selling_price FROM market_products WHERE company_id = $1 AND is_active = true AND barcode = $2 LIMIT 1`,
+          [auth.companyId, price.productSku]
+        )
+        if (exactMatch.rows.length > 0) {
+          productId = exactMatch.rows[0].id
+          ourPrice = parseFloat(exactMatch.rows[0].selling_price) || null
+          matchType = 'exact'
+          matched++
+        }
       }
+
+      // 2. Try SKU match
+      if (!productId && price.productSku) {
+        const skuMatch = await db.query(
+          `SELECT id, selling_price FROM market_products WHERE company_id = $1 AND is_active = true AND sku ILIKE $2 LIMIT 1`,
+          [auth.companyId, price.productSku]
+        )
+        if (skuMatch.rows.length > 0) {
+          productId = skuMatch.rows[0].id
+          ourPrice = parseFloat(skuMatch.rows[0].selling_price) || null
+          matchType = 'exact'
+          matched++
+        }
+      }
+
+      // 3. Try name match (fuzzy)
+      if (!productId) {
+        const nameMatch = await db.query(
+          `SELECT id, selling_price, name FROM market_products WHERE company_id = $1 AND is_active = true AND name ILIKE $2 LIMIT 1`,
+          [auth.companyId, `%${price.productName}%`]
+        )
+        if (nameMatch.rows.length > 0) {
+          productId = nameMatch.rows[0].id
+          ourPrice = parseFloat(nameMatch.rows[0].selling_price) || null
+          const confidence = price.confidenceScore || 0.5
+          matchType = confidence >= 0.8 ? 'similar' : 'uncertain'
+          matched++
+        }
+      }
+
+      // Use match_type from caller if provided explicitly
+      if (price.matchType) matchType = price.matchType
 
       // Calculate price difference
       const compPrice = parseFloat(price.competitorPrice)
@@ -57,12 +86,15 @@ export async function POST(request: NextRequest) {
         ? ((ourPrice - compPrice) / ourPrice) * 100
         : null
 
+      // Ensure match_type column exists
+      try { await db.query("ALTER TABLE mi_competitor_prices ADD COLUMN IF NOT EXISTS match_type VARCHAR(20) DEFAULT 'exact'") } catch {}
+
       await db.query(`
         INSERT INTO mi_competitor_prices (
           company_id, competitor_id, product_id, product_name, product_sku,
           competitor_price, our_price, currency, price_difference, price_diff_percent,
-          source_url, confidence_score, captured_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          source_url, confidence_score, captured_by, match_type
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       `, [
         auth.companyId,
         price.competitorId || null,
@@ -76,7 +108,8 @@ export async function POST(request: NextRequest) {
         priceDiffPct ? Math.round(priceDiffPct * 100) / 100 : null,
         price.sourceUrl || null,
         price.confidenceScore || null,
-        auth.agentType || 'research'
+        auth.agentType || 'research',
+        matchType
       ])
       inserted++
 
