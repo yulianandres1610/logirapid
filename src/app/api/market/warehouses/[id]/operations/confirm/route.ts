@@ -11,7 +11,7 @@ interface JWTPayload {
   companyName: string
 }
 
-type OperationType = 'reception' | 'transfer' | 'scrap' | 'adjustment'
+type OperationType = 'reception' | 'transfer' | 'scrap' | 'adjustment' | 'wholesale_delivery' | 'production_out' | 'production_in'
 type ReferenceType = 'purchase_order' | 'consignment' | 'none'
 
 interface OperationLine {
