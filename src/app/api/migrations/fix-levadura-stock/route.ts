@@ -92,7 +92,8 @@ export async function GET() {
         movement_type, quantity, quantity_before, quantity_after,
         reference_type, reference_id, notes, created_by, created_at
       ) VALUES (31, $1, $2, NULL, 'wholesale_out', $3, $4, $5, 'wholesale_delivery', $6,
-        'Corrección manual: Entrega mayorista FAC-2026-0011 - 400 Levadura Angel 500g', 1, NOW())
+        'Corrección manual: Entrega mayorista FAC-2026-0011 - 400 Levadura Angel 500g',
+        (SELECT id FROM users WHERE company_id = 31 LIMIT 1), NOW())
     `, [warehouseId, productId, quantity, beforeQty, afterQty, invoiceId])
     results.push('Stock movement: wholesale_out recorded')
 
