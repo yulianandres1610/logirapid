@@ -293,6 +293,23 @@ export async function POST(
             quantityChange = realStock - currentStock
             lineNotes = `Ajuste: ${currentStock} → ${realStock}. ${adjustmentReason}${lineNotes ? ' - ' + lineNotes : ''}`
             break
+
+          case 'wholesale_delivery':
+            // Deduct stock for wholesale delivery
+            if (line.quantity > currentStock && !warehouse.allow_negative_stock) {
+              throw new Error(`Stock insuficiente para ${product.name} (SKU: ${product.sku}). Disponible: ${currentStock}, Solicitado: ${line.quantity}`)
+            }
+            quantityChange = -line.quantity
+            lineNotes = `Entrega mayorista${lineNotes ? ' - ' + lineNotes : ''}`
+            break
+
+          case 'production_out':
+            quantityChange = -line.quantity
+            break
+
+          case 'production_in':
+            quantityChange = line.quantity
+            break
         }
 
         const newStock = currentStock + quantityChange
@@ -431,6 +448,80 @@ export async function POST(
           `, [warehouseId, payload.userId, referenceId])
         } catch (consError) {
           console.log('[Confirm Operation] Could not update consignment:', consError)
+        }
+      }
+
+      // If wholesale_delivery: update invoice delivery status + consignment lots + quantity_delivered
+      if (operationType === 'wholesale_delivery' && referenceId) {
+        try {
+          // Update delivery status to dispatched
+          await db.query(`
+            UPDATE market_invoice_deliveries SET status = 'dispatched', dispatched_at = NOW(), dispatched_by = $1
+            WHERE operation_id = $2
+          `, [payload.userId, operationId])
+
+          // Update invoice lines quantity_delivered and invoice status
+          const deliveryLines = await db.query(
+            'SELECT invoice_line_id, quantity_to_deliver, product_id, variant_id FROM market_invoice_delivery_lines WHERE delivery_id IN (SELECT id FROM market_invoice_deliveries WHERE operation_id = $1)',
+            [operationId]
+          )
+          for (const dl of deliveryLines.rows) {
+            await db.query(
+              'UPDATE market_invoice_lines SET quantity_delivered = COALESCE(quantity_delivered, 0) + $1 WHERE id = $2',
+              [dl.quantity_to_deliver, dl.invoice_line_id]
+            )
+            await db.query(
+              'UPDATE market_invoice_delivery_lines SET quantity_delivered = quantity_to_deliver WHERE invoice_line_id = $1 AND delivery_id IN (SELECT id FROM market_invoice_deliveries WHERE operation_id = $2)',
+              [dl.invoice_line_id, operationId]
+            )
+
+            // Deduct consignment lots (FIFO)
+            try {
+              const qty = parseFloat(dl.quantity_to_deliver) || 0
+              let remaining = qty
+              const lots = await db.query(`
+                SELECT id, quantity_available, unit_cost, order_line_id, supplier_id
+                FROM consignment_lot_inventory
+                WHERE warehouse_id = $1 AND product_id = $2 AND quantity_available > 0
+                ORDER BY received_at ASC
+              `, [warehouseId, dl.product_id])
+
+              for (const lot of lots.rows) {
+                if (remaining <= 0) break
+                const available = parseFloat(lot.quantity_available) || 0
+                const toDeduct = Math.min(remaining, available)
+                const unitCost = parseFloat(lot.unit_cost) || 0
+
+                await db.query('UPDATE consignment_lot_inventory SET quantity_available = quantity_available - $1, quantity_sold = COALESCE(quantity_sold, 0) + $1 WHERE id = $2', [toDeduct, lot.id])
+
+                if (lot.order_line_id) {
+                  await db.query('UPDATE consignment_order_lines SET quantity_sold = COALESCE(quantity_sold, 0) + $1 WHERE id = $2', [toDeduct, lot.order_line_id])
+                  const orderRes = await db.query('SELECT order_id FROM consignment_order_lines WHERE id = $1', [lot.order_line_id])
+                  if (orderRes.rows.length > 0) {
+                    await db.query('UPDATE consignment_orders SET total_sold = COALESCE(total_sold, 0) + $1, updated_at = NOW() WHERE id = $2', [toDeduct * unitCost, orderRes.rows[0].order_id])
+                  }
+                }
+
+                if (lot.supplier_id) {
+                  await db.query('UPDATE consignment_supplier_wallets SET balance_available = COALESCE(balance_available, 0) + $1, total_earned = COALESCE(total_earned, 0) + $1 WHERE supplier_id = $2', [toDeduct * unitCost, lot.supplier_id])
+                }
+
+                remaining -= toDeduct
+              }
+            } catch (consErr) {
+              console.log('[Confirm] Consignment lot deduction skipped:', consErr instanceof Error ? consErr.message : consErr)
+            }
+          }
+
+          // Update invoice status to delivered
+          await db.query(`
+            UPDATE market_invoices SET status = 'delivered', delivered_at = NOW(), updated_at = NOW()
+            WHERE id = $1
+          `, [referenceId])
+
+          console.log('[Confirm] Wholesale delivery completed for invoice', referenceId)
+        } catch (wdErr) {
+          console.log('[Confirm] Wholesale delivery update error:', wdErr instanceof Error ? wdErr.message : wdErr)
         }
       }
 
