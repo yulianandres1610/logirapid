@@ -61,11 +61,11 @@ async function generateDeliveryNumber(companyId: number): Promise<string> {
   return `${prefix}${nextNumber.toString().padStart(4, '0')}`
 }
 
-// NOTE: deductStockFIFO removed - stock is deducted in the complete endpoint only
-// when warehouse dispatches the delivery, NOT at confirm time.
-
-/* eslint-disable @typescript-eslint/no-unused-vars */
-async function _deductStockFIFO_REMOVED(
+/**
+ * Deduct stock from warehouse when confirming invoice delivery.
+ * Called during the confirm transaction.
+ */
+async function deductStockFIFO(
   txClient: any,
   warehouseId: number,
   productId: number,
@@ -548,7 +548,7 @@ export async function POST(
             payload.userId])
           const deliveryId = delResult.rows[0].id
 
-          // Create lines — stock NOT deducted yet, waits for warehouse dispatch
+          // Create lines + deduct stock immediately
           for (const item of warehouseLines) {
             await client.query(`
               INSERT INTO market_warehouse_operation_lines (
@@ -560,8 +560,16 @@ export async function POST(
               INSERT INTO market_invoice_delivery_lines (
                 delivery_id, invoice_line_id, product_id, variant_id,
                 quantity_to_deliver, quantity_delivered, created_at
-              ) VALUES ($1, $2, $3, $4, $5, 0, NOW())
+              ) VALUES ($1, $2, $3, $4, $5, $5, NOW())
             `, [deliveryId, item.lineId, item.productId, item.variantId, item.quantity])
+
+            // Deduct stock from warehouse
+            await deductStockFIFO(
+              client, warehouseId, item.productId, item.variantId,
+              item.quantity, payload.companyId, payload.userId,
+              invoice.invoice_number, invoice.customer_name || '',
+              operationId, item.productName
+            )
           }
 
           createdDeliveries.push({
@@ -613,8 +621,16 @@ export async function POST(
             INSERT INTO market_invoice_delivery_lines (
               delivery_id, invoice_line_id, product_id, variant_id,
               quantity_to_deliver, quantity_delivered, created_at
-            ) VALUES ($1, $2, $3, $4, $5, 0, NOW())
+            ) VALUES ($1, $2, $3, $4, $5, $5, NOW())
           `, [deliveryId, line.id, line.product_id, line.variant_id, qty])
+
+          // Deduct stock from warehouse
+          await deductStockFIFO(
+            client, invoice.warehouse_id, line.product_id, line.variant_id,
+            qty, payload.companyId, payload.userId,
+            invoice.invoice_number, invoice.customer_name || '',
+            operationId, line.product_name
+          )
         }
 
         createdDeliveries.push({
@@ -625,15 +641,23 @@ export async function POST(
         })
       }
 
-      // NOTE: Do NOT update quantity_delivered here.
-      // quantity_delivered is updated when the delivery is dispatched/completed,
-      // not when the invoice is confirmed. The delivery is still pending at this point.
+      // Update invoice lines quantity_delivered
+      for (const line of linesResult.rows) {
+        const qty = isMultiWarehouse
+          ? Object.values(parseWQ(line.warehouse_quantities)).reduce((s, v) => s + (v > 0 ? v : 0), 0)
+          : parseFloat(line.quantity)
+        await client.query(
+          'UPDATE market_invoice_lines SET quantity_delivered = COALESCE(quantity_delivered, 0) + $1 WHERE id = $2',
+          [qty, line.id]
+        )
+      }
 
-      // Update invoice status to confirmed (pending delivery from warehouse)
+      // Update invoice status to delivered (stock already deducted)
       await client.query(`
         UPDATE market_invoices SET
-          status = 'confirmed',
+          status = 'delivered',
           confirmed_at = COALESCE(confirmed_at, NOW()),
+          delivered_at = NOW(),
           updated_at = NOW()
         WHERE id = $1
       `, [invoiceId])
