@@ -491,6 +491,18 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
       doc.text(`Pagado: ${paid}`, mg + 120, y); y += 10
     }
 
+    // Notes section
+    if (invoice.notes) {
+      y += 2
+      doc.setFillColor(245, 245, 245); doc.rect(mg, y - 3, cw, 6 + Math.ceil(invoice.notes.length / 80) * 4, 'F')
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(80, 80, 80)
+      doc.text('Nota:', mg + 3, y + 1)
+      doc.setFont('helvetica', 'normal')
+      const noteLines = doc.splitTextToSize(invoice.notes, cw - 20)
+      doc.text(noteLines, mg + 15, y + 1)
+      y += noteLines.length * 4 + 8
+    }
+
     // Footer
     y = Math.max(y, ph - 40)
     doc.setDrawColor(200, 200, 200); doc.line(mg, y, pw - mg, y); y += 6
