@@ -466,93 +466,111 @@ export async function POST(request: NextRequest) {
       return { invoiceId, invoiceNumber }
     })
 
-    // Auto-create warehouse operation + delivery ONLY if invoice is paid
+    // Auto-create warehouse operations + deliveries ONLY if invoice is paid
     if (hasImmediatePayment) try {
-      // Resolve warehouse
-      let deliveryWarehouseId = warehouseId
-      if (!deliveryWarehouseId) {
-        const wRes = await db.query(
-          'SELECT id FROM market_warehouses WHERE company_id = $1 AND is_active = true ORDER BY is_central DESC NULLS LAST LIMIT 1',
-          [payload.companyId]
-        )
-        if (wRes.rows.length > 0) {
-          deliveryWarehouseId = wRes.rows[0].id
-          await db.query('UPDATE market_invoices SET warehouse_id = $1 WHERE id = $2', [deliveryWarehouseId, result.invoiceId])
+      const yr = new Date().getFullYear()
+      const custRes = await db.query('SELECT business_name, address FROM market_wholesale_customers WHERE id = $1', [customerId])
+      const customerName = custRes.rows[0]?.business_name || ''
+      const customerAddress = custRes.rows[0]?.address || ''
+
+      // Get invoice lines with warehouse_quantities
+      const invoiceLines = await db.query(
+        'SELECT id, product_id, variant_id, product_name, quantity, warehouse_quantities FROM market_invoice_lines WHERE invoice_id = $1',
+        [result.invoiceId]
+      )
+
+      // Group lines by warehouse
+      const linesByWarehouse = new Map<number, Array<{ lineId: number; productId: number; variantId: number | null; productName: string; quantity: number }>>()
+
+      for (const line of invoiceLines.rows) {
+        const wq = typeof line.warehouse_quantities === 'string'
+          ? JSON.parse(line.warehouse_quantities || '{}')
+          : (line.warehouse_quantities || {})
+        const hasWQ = Object.keys(wq).length > 0 && Object.values(wq).some((v: any) => v > 0)
+
+        if (hasWQ) {
+          // Multi-warehouse: distribute by warehouse_quantities
+          for (const [wIdStr, qty] of Object.entries(wq)) {
+            const wId = parseInt(wIdStr)
+            const q = parseFloat(String(qty)) || 0
+            if (q <= 0) continue
+            if (!linesByWarehouse.has(wId)) linesByWarehouse.set(wId, [])
+            linesByWarehouse.get(wId)!.push({ lineId: line.id, productId: line.product_id, variantId: line.variant_id, productName: line.product_name, quantity: q })
+          }
+        } else {
+          // Single warehouse: use invoice warehouse or fallback
+          let wId = warehouseId
+          if (!wId) {
+            const wRes = await db.query('SELECT id FROM market_warehouses WHERE company_id = $1 AND is_active = true ORDER BY is_central DESC NULLS LAST LIMIT 1', [payload.companyId])
+            if (wRes.rows.length > 0) wId = wRes.rows[0].id
+          }
+          if (wId) {
+            if (!linesByWarehouse.has(wId)) linesByWarehouse.set(wId, [])
+            linesByWarehouse.get(wId)!.push({ lineId: line.id, productId: line.product_id, variantId: line.variant_id, productName: line.product_name, quantity: parseFloat(line.quantity) || 0 })
+          }
         }
       }
 
-      if (deliveryWarehouseId) {
-        const yr = new Date().getFullYear()
+      // Update invoice warehouse_id if not set
+      if (!warehouseId && linesByWarehouse.size > 0) {
+        const firstWh = linesByWarehouse.keys().next().value
+        await db.query('UPDATE market_invoices SET warehouse_id = $1 WHERE id = $2', [firstWh, result.invoiceId])
+      }
 
-        // Generate unique operation number
-        const opNumRes = await db.query(
-          "SELECT operation_number FROM market_warehouse_operations WHERE company_id = $1 AND operation_number LIKE $2 ORDER BY id DESC LIMIT 1",
-          [payload.companyId, `WD-${yr}-%`]
-        )
-        let opNext = 1
-        if (opNumRes.rows.length > 0) {
-          const m = opNumRes.rows[0].operation_number.match(/WD-\d{4}-(\d+)/)
-          if (m) opNext = parseInt(m[1]) + 1
-        }
-        const opNumber = `WD-${yr}-${String(opNext).padStart(4, '0')}`
+      // Get warehouse names
+      const whIds = Array.from(linesByWarehouse.keys())
+      const whNames = new Map<number, string>()
+      if (whIds.length > 0) {
+        const whRes = await db.query('SELECT id, name FROM market_warehouses WHERE id = ANY($1)', [whIds])
+        for (const w of whRes.rows) whNames.set(w.id, w.name)
+      }
 
-        // Generate unique delivery number
-        const delNumRes = await db.query(
-          "SELECT delivery_number FROM market_invoice_deliveries WHERE delivery_number LIKE $1 ORDER BY id DESC LIMIT 1",
-          [`ENT-${yr}-%`]
-        )
-        let delNext = 1
-        if (delNumRes.rows.length > 0) {
-          const m = delNumRes.rows[0].delivery_number.match(/ENT-\d{4}-(\d+)/)
-          if (m) delNext = parseInt(m[1]) + 1
-        }
-        const delNumber = `ENT-${yr}-${String(delNext).padStart(4, '0')}`
+      // Create one operation + delivery per warehouse
+      let opCounter = 0
+      let delCounter = 0
 
-        // Get customer info
-        const custRes = await db.query('SELECT business_name, address FROM market_wholesale_customers WHERE id = $1', [customerId])
-        const customerName = custRes.rows[0]?.business_name || ''
-        const customerAddress = custRes.rows[0]?.address || ''
+      // Get starting numbers
+      const opNumRes = await db.query("SELECT operation_number FROM market_warehouse_operations WHERE company_id = $1 AND operation_number LIKE $2 ORDER BY id DESC LIMIT 1", [payload.companyId, `WD-${yr}-%`])
+      let opNext = 1
+      if (opNumRes.rows.length > 0) { const m = opNumRes.rows[0].operation_number.match(/WD-\d{4}-(\d+)/); if (m) opNext = parseInt(m[1]) + 1 }
 
-        // Create operation
+      const delNumRes = await db.query("SELECT delivery_number FROM market_invoice_deliveries WHERE delivery_number LIKE $1 ORDER BY id DESC LIMIT 1", [`ENT-${yr}-%`])
+      let delNext = 1
+      if (delNumRes.rows.length > 0) { const m = delNumRes.rows[0].delivery_number.match(/ENT-\d{4}-(\d+)/); if (m) delNext = parseInt(m[1]) + 1 }
+
+      for (const [whId, whLines] of linesByWarehouse) {
+        const opNumber = `WD-${yr}-${String(opNext + opCounter).padStart(4, '0')}`
+        const delNumber = `ENT-${yr}-${String(delNext + delCounter).padStart(4, '0')}`
+        opCounter++; delCounter++
+
         const opRes = await db.query(`
           INSERT INTO market_warehouse_operations (
             company_id, operation_number, operation_type, status, source_warehouse_id,
             reference_type, reference_id, reference_number, notes, created_by, created_at
           ) VALUES ($1, $2, 'wholesale_delivery', 'confirmed', $3, 'wholesale_invoice', $4, $5, $6, $7, NOW())
           RETURNING id
-        `, [payload.companyId, opNumber, deliveryWarehouseId, result.invoiceId, result.invoiceNumber,
-            `Entrega mayorista - Cliente: ${customerName}`, payload.userId])
+        `, [payload.companyId, opNumber, whId, result.invoiceId, result.invoiceNumber,
+            `Entrega mayorista desde ${whNames.get(whId) || 'almacén'} - ${customerName}`, payload.userId])
         const operationId = opRes.rows[0].id
 
-        // Create delivery
         const delivRes = await db.query(`
           INSERT INTO market_invoice_deliveries (
             invoice_id, delivery_number, warehouse_id, operation_id, status, delivery_address, notes, created_by, created_at
           ) VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, NOW())
           RETURNING id
-        `, [result.invoiceId, delNumber, deliveryWarehouseId, operationId, customerAddress,
-            `Entrega desde almacén`, payload.userId])
+        `, [result.invoiceId, delNumber, whId, operationId, customerAddress,
+            `Entrega desde ${whNames.get(whId) || 'almacén'}`, payload.userId])
         const deliveryId = delivRes.rows[0].id
 
-        // Create operation lines + delivery lines
-        const invoiceLines = await db.query('SELECT id, product_id, variant_id, product_name, quantity FROM market_invoice_lines WHERE invoice_id = $1', [result.invoiceId])
-        for (const line of invoiceLines.rows) {
-          const qty = parseFloat(line.quantity) || 0
-          await db.query(
-            'INSERT INTO market_warehouse_operation_lines (operation_id, product_id, variant_id, quantity_planned, created_at) VALUES ($1, $2, $3, $4, NOW())',
-            [operationId, line.product_id, line.variant_id, qty]
-          )
-          await db.query(
-            'INSERT INTO market_invoice_delivery_lines (delivery_id, invoice_line_id, product_id, variant_id, quantity_to_deliver, quantity_delivered, created_at) VALUES ($1, $2, $3, $4, $5, 0, NOW())',
-            [deliveryId, line.id, line.product_id, line.variant_id, qty]
-          )
+        for (const item of whLines) {
+          await db.query('INSERT INTO market_warehouse_operation_lines (operation_id, product_id, variant_id, quantity_planned, created_at) VALUES ($1, $2, $3, $4, NOW())', [operationId, item.productId, item.variantId, item.quantity])
+          await db.query('INSERT INTO market_invoice_delivery_lines (delivery_id, invoice_line_id, product_id, variant_id, quantity_to_deliver, quantity_delivered, created_at) VALUES ($1, $2, $3, $4, $5, 0, NOW())', [deliveryId, item.lineId, item.productId, item.variantId, item.quantity])
         }
 
-        // Update invoice confirmed_at
-        await db.query('UPDATE market_invoices SET confirmed_at = NOW() WHERE id = $1', [result.invoiceId])
-
-        console.log('[Wholesale Invoice] Auto-created delivery', delNumber, 'operation', opNumber)
+        console.log(`[Wholesale Invoice] Auto-created delivery ${delNumber} operation ${opNumber} for warehouse ${whNames.get(whId)} (${whLines.length} products)`)
       }
+
+      await db.query('UPDATE market_invoices SET confirmed_at = NOW() WHERE id = $1', [result.invoiceId])
     } catch (deliveryError) {
       console.error('[Wholesale Invoice] Auto-delivery creation error:', deliveryError)
     }
