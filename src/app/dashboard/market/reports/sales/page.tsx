@@ -638,106 +638,156 @@ export default function SalesReportPage() {
                   )
                 })()}
 
-                {/* Pie Chart + Table side by side */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Pie Chart */}
-                  <div className={cn('p-5 rounded-2xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-                    <h3 className={cn('font-semibold mb-4', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      Distribución por Método de Pago
-                    </h3>
-                    {(() => {
-                      const methods = data.byPaymentMethod || []
-                      const COLORS = ['#f97316', '#3b82f6', '#10b981', '#8b5cf6', '#ef4444', '#eab308']
-                      // Group by method (combine currencies)
-                      const grouped = methods.reduce((acc, m) => {
-                        const key = formatPaymentMethod(m.paymentMethod)
-                        if (!acc[key]) acc[key] = { name: key, value: 0, orders: 0 }
-                        acc[key].value += parseFloat(String(m.amount))
-                        acc[key].orders += parseInt(String(m.orders))
-                        return acc
-                      }, {} as Record<string, { name: string; value: number; orders: number }>)
-                      const pieData = Object.values(grouped).sort((a, b) => b.value - a.value)
-                      const total = pieData.reduce((s, d) => s + d.value, 0)
+                {/* Breakdown by currency - separate % per currency */}
+                {(() => {
+                  const methods = data.byPaymentMethod || []
+                  const COLORS_USD = ['#f97316', '#3b82f6', '#10b981', '#8b5cf6']
+                  const COLORS_CUP = ['#eab308', '#06b6d4', '#ec4899', '#84cc16']
 
-                      return pieData.length > 0 ? (
-                        <>
-                          <ResponsiveContainer width="100%" height={280}>
-                            <PieChart>
-                              <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100}
-                                dataKey="value" nameKey="name" paddingAngle={3}>
-                                {pieData.map((_, i) => (
-                                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                                ))}
-                              </Pie>
-                              <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                              <Legend />
-                            </PieChart>
-                          </ResponsiveContainer>
-                          {/* Percentage labels */}
-                          <div className="mt-4 space-y-2">
-                            {pieData.map((d, i) => (
-                              <div key={d.name} className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                                  <span className={cn('text-sm', theme === 'dark' ? 'text-gray-300' : 'text-gray-700')}>{d.name}</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm font-bold" style={{ color: COLORS[i % COLORS.length] }}>
-                                    {total > 0 ? ((d.value / total) * 100).toFixed(1) : 0}%
-                                  </span>
-                                  <span className={cn('text-sm font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>{formatCurrency(d.value)}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      ) : (
-                        <p className="text-gray-500 text-center py-12">No hay datos de pagos para el periodo</p>
-                      )
-                    })()}
-                  </div>
+                  // Group by currency
+                  const usdMethods = methods.filter(m => m.currency === 'USD' || (!m.currency && m.paymentMethod !== 'cash_cup'))
+                  const cupMethods = methods.filter(m => m.currency === 'CUP')
+                  const usdTotal = usdMethods.reduce((s, m) => s + parseFloat(String(m.amount)), 0)
+                  const cupTotal = cupMethods.reduce((s, m) => s + parseFloat(String(m.amount)), 0)
 
-                  {/* Table */}
-                  <div className={cn('p-5 rounded-2xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-                    <h3 className={cn('font-semibold mb-4', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                      Detalle por Método y Moneda
-                    </h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className={cn('border-b', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
-                            <th className="text-left py-3 px-2 text-gray-500 font-medium">Método</th>
-                            <th className="text-left py-3 px-2 text-gray-500 font-medium">Moneda</th>
-                            <th className="text-right py-3 px-2 text-gray-500 font-medium">Órdenes</th>
-                            <th className="text-right py-3 px-2 text-gray-500 font-medium">Monto</th>
-                            <th className="text-right py-3 px-2 text-gray-500 font-medium">%</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(() => {
-                            const methods = data.byPaymentMethod || []
-                            const totalAmount = methods.reduce((s, m) => s + parseFloat(String(m.amount)), 0)
-                            return methods.length > 0 ? methods.map((m, i) => {
-                              const amount = parseFloat(String(m.amount))
-                              const orders = parseInt(String(m.orders))
-                              const pct = totalAmount > 0 ? ((amount / totalAmount) * 100).toFixed(1) : '0'
-                              return (
-                                <tr key={i} className={cn('border-b', theme === 'dark' ? 'border-gray-700/50' : 'border-gray-100')}>
-                                  <td className="py-3 px-2">
-                                    <div className="flex items-center gap-2">
-                                      {getPaymentMethodIcon(m.paymentMethod)}
-                                      <span className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
-                                        {formatPaymentMethod(m.paymentMethod)}
-                                      </span>
-                                    </div>
-                                  </td>
-                                  <td className="py-3 px-2">
-                                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                                      {m.currency}
+                  const buildPieData = (items: typeof methods) => {
+                    const grouped: Record<string, { name: string; value: number }> = {}
+                    items.forEach(m => {
+                      const key = formatPaymentMethod(m.paymentMethod)
+                      if (!grouped[key]) grouped[key] = { name: key, value: 0 }
+                      grouped[key].value += parseFloat(String(m.amount))
+                    })
+                    return Object.values(grouped).sort((a, b) => b.value - a.value)
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* USD breakdown */}
+                      <div className={cn('p-5 rounded-2xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                        <h3 className={cn('font-semibold mb-1', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          Recaudación en USD
+                        </h3>
+                        <p className="text-2xl font-bold text-orange-600 mb-4">{formatCurrency(usdTotal)}</p>
+                        {usdTotal > 0 ? (
+                          <>
+                            <ResponsiveContainer width="100%" height={200}>
+                              <PieChart>
+                                <Pie data={buildPieData(usdMethods)} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" nameKey="name" paddingAngle={3}>
+                                  {buildPieData(usdMethods).map((_, i) => <Cell key={i} fill={COLORS_USD[i % COLORS_USD.length]} />)}
+                                </Pie>
+                                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                            <div className="space-y-2 mt-2">
+                              {buildPieData(usdMethods).map((d, i) => (
+                                <div key={d.name} className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS_USD[i % COLORS_USD.length] }} />
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">{d.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold" style={{ color: COLORS_USD[i % COLORS_USD.length] }}>
+                                      {((d.value / usdTotal) * 100).toFixed(1)}%
                                     </span>
+                                    <span className="text-sm font-medium text-gray-900 dark:text-white">{formatCurrency(d.value)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        ) : <p className="text-gray-400 text-center py-8 text-sm">Sin pagos en USD</p>}
+                      </div>
+
+                      {/* CUP breakdown */}
+                      <div className={cn('p-5 rounded-2xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                        <h3 className={cn('font-semibold mb-1', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                          Recaudación en CUP
+                        </h3>
+                        <p className="text-2xl font-bold text-amber-600 mb-4">{Math.round(cupTotal).toLocaleString('es-ES')} CUP</p>
+                        {cupTotal > 0 ? (
+                          <>
+                            <ResponsiveContainer width="100%" height={200}>
+                              <PieChart>
+                                <Pie data={buildPieData(cupMethods)} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" nameKey="name" paddingAngle={3}>
+                                  {buildPieData(cupMethods).map((_, i) => <Cell key={i} fill={COLORS_CUP[i % COLORS_CUP.length]} />)}
+                                </Pie>
+                                <Tooltip formatter={(v: number) => `${Math.round(v).toLocaleString('es-ES')} CUP`} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                            <div className="space-y-2 mt-2">
+                              {buildPieData(cupMethods).map((d, i) => (
+                                <div key={d.name} className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS_CUP[i % COLORS_CUP.length] }} />
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">{d.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold" style={{ color: COLORS_CUP[i % COLORS_CUP.length] }}>
+                                      {((d.value / cupTotal) * 100).toFixed(1)}%
+                                    </span>
+                                    <span className="text-sm font-medium text-gray-900 dark:text-white">{Math.round(d.value).toLocaleString('es-ES')} CUP</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        ) : <p className="text-gray-400 text-center py-8 text-sm">Sin pagos en CUP</p>}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Detailed table by method + currency with % within each currency */}
+                <div className={cn('p-5 rounded-2xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                  <h3 className={cn('font-semibold mb-4', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                    Detalle por Método y Moneda
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className={cn('border-b', theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                          <th className="text-left py-3 px-2 text-gray-500 font-medium">Método</th>
+                          <th className="text-left py-3 px-2 text-gray-500 font-medium">Moneda</th>
+                          <th className="text-right py-3 px-2 text-gray-500 font-medium">Órdenes</th>
+                          <th className="text-right py-3 px-2 text-gray-500 font-medium">Monto</th>
+                          <th className="text-right py-3 px-2 text-gray-500 font-medium">% en su moneda</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          const methods = data.byPaymentMethod || []
+                          // Calculate totals per currency for % within each currency
+                          const totalByCurrency: Record<string, number> = {}
+                          methods.forEach(m => {
+                            const cur = m.currency || 'USD'
+                            totalByCurrency[cur] = (totalByCurrency[cur] || 0) + parseFloat(String(m.amount))
+                          })
+                          return methods.length > 0 ? methods.map((m, i) => {
+                            const amount = parseFloat(String(m.amount))
+                            const cur = m.currency || 'USD'
+                            const curTotal = totalByCurrency[cur] || 1
+                            const pct = ((amount / curTotal) * 100).toFixed(1)
+                            return (
+                              <tr key={i} className={cn('border-b', theme === 'dark' ? 'border-gray-700/50' : 'border-gray-100')}>
+                                <td className="py-3 px-2">
+                                  <div className="flex items-center gap-2">
+                                    {getPaymentMethodIcon(m.paymentMethod)}
+                                    <span className={cn('font-medium', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                      {formatPaymentMethod(m.paymentMethod)}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-2">
+                                  <span className={cn('px-2 py-0.5 rounded text-xs font-medium',
+                                    cur === 'CUP' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400')}>
+                                    {cur}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-2 text-right font-medium text-gray-900 dark:text-white">{m.orders}</td>
+                                  <td className="py-3 px-2 text-right font-bold text-orange-600">
+                                    {cur === 'CUP' ? `${Math.round(amount).toLocaleString('es-ES')} CUP` : formatCurrency(amount)}
                                   </td>
-                                  <td className="py-3 px-2 text-right font-medium text-gray-900 dark:text-white">{m.orders}</td>
-                                  <td className="py-3 px-2 text-right font-bold text-orange-600">{formatCurrency(amount)}</td>
                                   <td className="py-3 px-2 text-right">
                                     <div className="flex items-center justify-end gap-2">
                                       <div className="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
