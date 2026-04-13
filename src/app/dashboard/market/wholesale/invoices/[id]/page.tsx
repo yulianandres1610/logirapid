@@ -345,7 +345,12 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     const sr = brandName === 'servisumic' ? [63, 59, 57] : [3, 96, 229]
     const cupRate = rates.CUP
 
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [215.9, 279.4] })
+    doc.setProperties({
+      title: `Factura ${invoice.invoiceNumber}`,
+      subject: `Factura mayorista ${invoice.invoiceNumber}`,
+      creator: 'LogiRapid/Servisumic'
+    })
     const pw = 215.9, ph = 279.4, mg = 14, cw = pw - mg * 2
     let y = 14
 
