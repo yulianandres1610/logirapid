@@ -33,7 +33,7 @@ async function generateOperationNumber(companyId: number): Promise<string> {
   const result = await db.query(`
     SELECT operation_number FROM market_warehouse_operations
     WHERE company_id = $1 AND operation_number LIKE $2
-    ORDER BY operation_number DESC LIMIT 1
+    ORDER BY id DESC LIMIT 1
   `, [companyId, `${prefix}%`])
 
   let nextNumber = 1
@@ -41,7 +41,17 @@ async function generateOperationNumber(companyId: number): Promise<string> {
     const match = result.rows[0].operation_number.match(/WD-\d{4}-(\d+)/)
     if (match) nextNumber = parseInt(match[1]) + 1
   }
-  return `${prefix}${nextNumber.toString().padStart(4, '0')}`
+  // Add random suffix to avoid collisions on race conditions
+  const num = `${prefix}${nextNumber.toString().padStart(4, '0')}`
+  // Verify it doesn't exist
+  const check = await db.query(
+    'SELECT id FROM market_warehouse_operations WHERE company_id = $1 AND operation_number = $2',
+    [companyId, num]
+  )
+  if (check.rows.length > 0) {
+    return `${prefix}${(nextNumber + 1).toString().padStart(4, '0')}`
+  }
+  return num
 }
 
 async function generateDeliveryNumber(companyId: number): Promise<string> {
@@ -50,7 +60,7 @@ async function generateDeliveryNumber(companyId: number): Promise<string> {
   const result = await db.query(`
     SELECT delivery_number FROM market_invoice_deliveries
     WHERE delivery_number LIKE $1
-    ORDER BY delivery_number DESC LIMIT 1
+    ORDER BY id DESC LIMIT 1
   `, [`${prefix}%`])
 
   let nextNumber = 1
