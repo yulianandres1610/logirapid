@@ -69,7 +69,7 @@ export async function GET() {
         company_id, operation_number, operation_type, status, source_warehouse_id,
         reference_type, reference_id, reference_number, notes, created_by, created_at
       ) VALUES ($1, $2, 'wholesale_delivery', 'confirmed', $3, 'wholesale_invoice', $4, $5, $6,
-        (SELECT id FROM users WHERE company_id = $1 LIMIT 1), NOW())
+        (SELECT u.id FROM users u JOIN user_companies uc ON uc.user_id = u.id WHERE uc.company_id = $1 LIMIT 1), NOW())
       RETURNING id
     `, [invoice.company_id, opNumber, warehouseId, invoice.id, invoice.invoice_number,
         `Entrega mayorista - Cliente: ${invoice.business_name || ''}`])
