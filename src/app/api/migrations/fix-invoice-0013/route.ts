@@ -26,7 +26,7 @@ export async function GET() {
     await db.query('UPDATE market_invoice_lines SET quantity_delivered = 0 WHERE invoice_id = $1', [invoice.id])
 
     const yr = new Date().getFullYear()
-    const userRes = await db.query('SELECT u.id FROM users u JOIN user_companies uc ON uc.user_id = u.id WHERE uc.company_id = $1 LIMIT 1', [invoice.company_id])
+    const userRes = await db.query('SELECT u.id FROM users u JOIN user_companies uc ON uc.userid = u.id WHERE uc.companyid = $1 LIMIT 1', [invoice.company_id])
     const userId = userRes.rows[0]?.id || 1
 
     const lines = await db.query('SELECT id, product_id, variant_id, product_name, quantity, warehouse_quantities FROM market_invoice_lines WHERE invoice_id = $1', [invoice.id])
