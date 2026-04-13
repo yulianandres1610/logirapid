@@ -806,7 +806,6 @@ export default function SalesReportPage() {
                       </table>
                     </div>
                   </div>
-                </div>
 
                 {/* Bar Chart - Amount by method */}
                 <div className={cn('p-5 rounded-2xl border', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
