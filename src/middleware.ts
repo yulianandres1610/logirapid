@@ -158,8 +158,9 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
-    // Allow market API routes (including consignments, purchases, order-invoices, uploads, migrations, ai, print, debug, users, audit)
+    // Allow market API routes (including consignments, purchases, order-invoices, uploads, migrations, ai, print, debug, users, audit, mkt)
     if (pathname.startsWith('/api/market') ||
+        pathname.startsWith('/api/mkt') ||
         pathname.startsWith('/api/auth') ||
         pathname.startsWith('/api/public') ||
         pathname.startsWith('/api/consignments') ||
@@ -335,6 +336,7 @@ export async function middleware(request: NextRequest) {
 
     // Allow market API routes (same as market subdomain - factory uses market dashboard)
     if (pathname.startsWith('/api/market') ||
+        pathname.startsWith('/api/mkt') ||
         pathname.startsWith('/api/auth') ||
         pathname.startsWith('/api/public') ||
         pathname.startsWith('/api/consignments') ||
@@ -347,7 +349,6 @@ export async function middleware(request: NextRequest) {
         pathname.startsWith('/api/audit') ||
         pathname.startsWith('/api/companies') ||
         pathname.startsWith('/api/webhooks') ||
-
         pathname.startsWith('/api/apps')) {
       return NextResponse.next()
     }

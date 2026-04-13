@@ -695,6 +695,21 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: Monitor, label: "Terminales POS", href: "/dashboard/market/reports/pos-terminals" },
       ]
     },
+    {
+      icon: TrendingUp,
+      label: "Marketing",
+      href: "/dashboard/market/marketing",
+      hasSubmenu: true,
+      submenuItems: [
+        { icon: BarChart3, label: "Dashboard", href: "/dashboard/market/marketing" },
+        { icon: Users, label: "Agentes", href: "/dashboard/market/marketing/agents" },
+        { icon: TrendingUp, label: "En Vivo", href: "/dashboard/market/marketing/activity" },
+        { icon: Tag, label: "Precios", href: "/dashboard/market/marketing/prices" },
+        { icon: CreditCard, label: "Campañas", href: "/dashboard/market/marketing/campaigns" },
+        { icon: Settings, label: "Canales", href: "/dashboard/market/marketing/channels" },
+        { icon: Users, label: "Ventas IA", href: "/dashboard/market/marketing/sales" },
+      ]
+    },
     { icon: ClipboardCheck, label: "Auditoría", href: "/dashboard/market/audits", requiredRole: 'MARKET_MANAGER' },
     { icon: Wallet, label: "Mi Wallet", href: "/dashboard/market/wallet" },
     { icon: Truck, label: "Entregas", href: "/dashboard/market/deliveries" },
