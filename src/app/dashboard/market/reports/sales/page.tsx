@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -98,10 +98,22 @@ interface RealtimeData {
 export default function SalesReportPage() {
   const { theme } = useTheme()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const reportRef = useRef<HTMLDivElement>(null)
   const [data, setData] = useState<SalesData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'trend' | 'products' | 'categories' | 'terminals' | 'hours' | 'payments' | 'realtime'>('trend')
+
+  const validTabs = ['trend', 'products', 'categories', 'terminals', 'hours', 'payments', 'realtime'] as const
+  type TabType = typeof validTabs[number]
+  const initialTab = (searchParams.get('tab') as TabType) || 'trend'
+  const [activeTab, setActiveTab] = useState<TabType>(validTabs.includes(initialTab) ? initialTab : 'trend')
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab)
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', tab)
+    router.replace(url.pathname + url.search, { scroll: false })
+  }
 
   // Realtime data
   const [realtimeData, setRealtimeData] = useState<RealtimeData | null>(null)
@@ -330,7 +342,7 @@ export default function SalesReportPage() {
             {tabs.map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => handleTabChange(tab.id as TabType)}
                 className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                   activeTab === tab.id
                     ? tab.id === 'realtime'
@@ -833,7 +845,14 @@ export default function SalesReportPage() {
                       <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white">
                         <p className="text-sm opacity-80">Total del Día</p>
                         <p className="text-2xl font-bold">{formatCurrency(realtimeData.grandTotal.sales)}</p>
-                        <p className="text-sm opacity-80">{realtimeData.grandTotal.orders} órdenes</p>
+                        <p className="text-sm opacity-80">
+                          {realtimeData.grandTotal.orders} órdenes
+                          {(realtimeData.grandTotal as any).wholesaleOrders > 0 && (
+                            <span className="block text-xs opacity-70">
+                              POS: {(realtimeData.grandTotal as any).posOrders || 0} · Mayoreo: {(realtimeData.grandTotal as any).wholesaleOrders || 0}
+                            </span>
+                          )}
+                        </p>
                       </div>
                       <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white">
                         <p className="text-sm opacity-80">Efectivo USD</p>
@@ -980,6 +999,41 @@ export default function SalesReportPage() {
                         </Table>
                       </div>
                     </div>
+
+                    {/* Wholesale Sales */}
+                    {(realtimeData as any).wholesale && (realtimeData as any).wholesale.length > 0 && (
+                      <div className={cn('rounded-xl border p-5', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                        <h4 className="font-semibold mb-4 flex items-center gap-2">
+                          <Package className="w-5 h-5 text-orange-500" />
+                          Ventas Mayoreo del Día
+                          <span className="text-xs bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 px-2 py-0.5 rounded-full">
+                            {(realtimeData as any).wholesale.length} facturas · {formatCurrency((realtimeData.grandTotal as any).wholesaleSales || 0)}
+                          </span>
+                        </h4>
+                        <div className="space-y-2">
+                          {(realtimeData as any).wholesale.map((w: any) => (
+                            <div key={w.id} className={cn('flex items-center justify-between p-3 rounded-lg',
+                              theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50')}>
+                              <div>
+                                <p className={cn('font-medium text-sm', theme === 'dark' ? 'text-white' : 'text-gray-900')}>
+                                  {w.invoiceNumber}
+                                </p>
+                                <p className="text-xs text-gray-500">{w.customerName} · {new Date(w.createdAt).toLocaleTimeString('es')}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-bold text-orange-600">{formatCurrency(w.totalAmount)}</p>
+                                <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium',
+                                  w.paymentStatus === 'paid' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                  : w.paymentStatus === 'partial' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400')}>
+                                  {w.paymentStatus === 'paid' ? 'Pagada' : w.paymentStatus === 'partial' ? 'Parcial' : 'Pendiente'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="text-center py-12 text-gray-500">

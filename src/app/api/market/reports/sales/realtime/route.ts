@@ -178,21 +178,59 @@ export async function GET(request: NextRequest) {
       target.total += p.amount
     }
 
+    // ── Wholesale sales for the day ──
+    let wholesaleSales: any[] = []
+    let wholesaleTotal = { orders: 0, sales: 0 }
+    try {
+      const wsResult = await db.query(`
+        SELECT i.id, i.invoice_number, i.total_amount, i.payment_status, i.status,
+          c.business_name as customer_name, i.created_at
+        FROM market_invoices i
+        LEFT JOIN market_wholesale_customers c ON c.id = i.customer_id
+        WHERE i.company_id = $1 AND DATE(i.created_at) = $2
+          AND i.status NOT IN ('cancelled', 'draft')
+        ORDER BY i.created_at DESC
+      `, [companyId, date])
+
+      wholesaleSales = wsResult.rows.map(r => ({
+        id: r.id,
+        invoiceNumber: r.invoice_number,
+        customerName: r.customer_name,
+        totalAmount: parseFloat(r.total_amount) || 0,
+        paymentStatus: r.payment_status,
+        status: r.status,
+        createdAt: r.created_at
+      }))
+
+      wholesaleTotal = {
+        orders: wholesaleSales.length,
+        sales: wholesaleSales.reduce((s, w) => s + w.totalAmount, 0)
+      }
+    } catch { /* table may not exist */ }
+
+    const posOrders = parseInt(grandTotalResult.rows[0]?.total_orders) || 0
+    const posSales = parseFloat(grandTotalResult.rows[0]?.total_sales) || 0
+
     return NextResponse.json({
       success: true,
       data: {
         date,
         lastUpdated: new Date().toISOString(),
         grandTotal: {
-          orders: parseInt(grandTotalResult.rows[0]?.total_orders) || 0,
-          sales: parseFloat(grandTotalResult.rows[0]?.total_sales) || 0
+          orders: posOrders + wholesaleTotal.orders,
+          sales: posSales + wholesaleTotal.sales,
+          posOrders,
+          posSales,
+          wholesaleOrders: wholesaleTotal.orders,
+          wholesaleSales: wholesaleTotal.sales
         },
         currencyTotals: {
           USD: usdTotals,
           CUP: cupTotals
         },
         paymentTotals,
-        terminals: Array.from(terminalMap.values())
+        terminals: Array.from(terminalMap.values()),
+        wholesale: wholesaleSales
       }
     })
 
