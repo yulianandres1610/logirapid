@@ -791,8 +791,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                   <span className="font-medium text-sm hidden sm:inline">PDF CUP</span>
                 </motion.button>
 
-                {/* Confirm Button - show when no deliveries exist (allow re-confirmation even if status is 'delivered' with missing delivery records) */}
-                {invoice.deliveries.length === 0 && invoice.status !== 'cancelled' && (
+                {/* Confirm Button - only for draft invoices (unpaid, no delivery yet) */}
+                {invoice.deliveries.length === 0 && invoice.status === 'draft' && (
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
@@ -805,7 +805,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                     ) : (
                       <CheckCircle className="w-4 h-4" />
                     )}
-                    Confirmar
+                    Crear Entrega
                   </motion.button>
                 )}
 
