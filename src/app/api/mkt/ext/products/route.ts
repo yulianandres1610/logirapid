@@ -32,16 +32,9 @@ export async function GET(request: NextRequest) {
 
     const result = await db.query(`
       SELECT
-        id,
-        name,
-        sku,
-        barcode,
-        category,
-        selling_price AS "sellingPrice",
-        cost_price AS "costPrice",
-        currency,
-        unit,
-        quantity_on_hand AS "stockOnHand"
+        id, name, sku, barcode, category,
+        selling_price, cost_price, currency,
+        unit_of_measure, quantity_on_hand
       FROM market_products
       WHERE ${conditions.join(' AND ')}
       ORDER BY name ASC
@@ -50,10 +43,19 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: {
-        products: result.rows,
-        total: result.rows.length
-      }
+      data: result.rows.map(p => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        barcode: p.barcode,
+        category: p.category,
+        sellingPrice: parseFloat(p.selling_price) || 0,
+        costPrice: parseFloat(p.cost_price) || 0,
+        currency: p.currency || 'USD',
+        unit: p.unit_of_measure || 'unidad',
+        stockOnHand: parseFloat(p.quantity_on_hand) || 0
+      })),
+      total: result.rows.length
     })
   } catch (error: any) {
     console.error('[MKT Ext] Products error:', error)
