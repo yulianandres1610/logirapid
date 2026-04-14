@@ -40,6 +40,7 @@ interface Agent {
   type: string
   description: string
   status: string
+  isOnline: boolean
   channels: string[]
   lastHeartbeat: string | null
   createdAt: string
@@ -106,7 +107,24 @@ export default function AgentsPage() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
-          setAgents(result.data || [])
+          const mapped = (result.data || []).map((a: any) => ({
+            id: a.id,
+            agentId: a.agent_id || '',
+            name: a.name || '',
+            type: a.type || 'custom',
+            description: a.description || '',
+            status: a.status || 'active',
+            isOnline: a.is_online === true,
+            channels: (() => {
+              try {
+                const ch = typeof a.channels === 'string' ? JSON.parse(a.channels) : a.channels
+                return Array.isArray(ch) ? ch : []
+              } catch { return [] }
+            })(),
+            lastHeartbeat: a.last_heartbeat_at || null,
+            createdAt: a.created_at || ''
+          }))
+          setAgents(mapped)
         }
       }
     } catch (error) {
@@ -153,13 +171,19 @@ export default function AgentsPage() {
     }
   }
 
-  const handleAction = async (agentId: string, action: 'pause' | 'resume' | 'delete') => {
+  const handleAction = async (id: number, action: 'pause' | 'resume' | 'delete') => {
     try {
-      const response = await fetch(`/api/mkt/agents/${agentId}/${action}`, {
-        method: 'POST'
-      })
-      if (response.ok) {
-        fetchAgents()
+      if (action === 'delete') {
+        const response = await fetch(`/api/mkt/agents/${id}`, { method: 'DELETE' })
+        if (response.ok) fetchAgents()
+      } else {
+        const newStatus = action === 'pause' ? 'paused' : 'active'
+        const response = await fetch(`/api/mkt/agents/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        })
+        if (response.ok) fetchAgents()
       }
     } catch (error) {
       console.error(`Error ${action} agent:`, error)
@@ -263,7 +287,7 @@ export default function AgentsPage() {
             {filteredAgents.map((agent, i) => {
               const typeConfig = getAgentTypeConfig(agent.type)
               const TypeIcon = typeConfig.icon
-              const isOnline = agent.status === 'online'
+              const isOnline = agent.isOnline
 
               return (
                 <motion.div
@@ -306,11 +330,11 @@ export default function AgentsPage() {
                       </span>
                       <span className={cn(
                         'text-xs px-2 py-0.5 rounded-full',
-                        agent.status === 'online' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                        agent.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                         agent.status === 'paused' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
                         'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
                       )}>
-                        {agent.status === 'online' ? 'Activo' : agent.status === 'paused' ? 'Pausado' : 'Inactivo'}
+                        {agent.status === 'active' ? 'Activo' : agent.status === 'paused' ? 'Pausado' : 'Inactivo'}
                       </span>
                     </div>
 
@@ -346,21 +370,21 @@ export default function AgentsPage() {
                     <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
                       {agent.status === 'paused' ? (
                         <button
-                          onClick={() => handleAction(agent.agentId, 'resume')}
+                          onClick={() => handleAction(agent.id, 'resume')}
                           className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
                         >
                           <Play className="w-3 h-3" /> Reanudar
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleAction(agent.agentId, 'pause')}
+                          onClick={() => handleAction(agent.id, 'pause')}
                           className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
                         >
                           <Pause className="w-3 h-3" /> Pausar
                         </button>
                       )}
                       <button
-                        onClick={() => handleAction(agent.agentId, 'delete')}
+                        onClick={() => handleAction(agent.id, 'delete')}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
                       >
                         <Trash2 className="w-3 h-3" /> Eliminar

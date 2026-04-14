@@ -75,6 +75,58 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PATCH(request: NextRequest) {
+  try {
+    const payload = await getPayload()
+    if (!payload) return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 })
+
+    const body = await request.json()
+    const { id } = body
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'id es requerido' }, { status: 400 })
+    }
+
+    const allowedFields = ['name', 'platform', 'identifier', 'purpose', 'assigned_agent_id', 'member_count', 'status']
+    const setClauses: string[] = []
+    const values: any[] = []
+    let paramIndex = 1
+
+    for (const field of allowedFields) {
+      const camelKey = field.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
+      const value = body[field] !== undefined ? body[field] : body[camelKey]
+      if (value !== undefined) {
+        setClauses.push(`${field} = $${paramIndex}`)
+        values.push(value === '' ? null : value)
+        paramIndex++
+      }
+    }
+
+    if (setClauses.length === 0) {
+      return NextResponse.json({ success: false, error: 'No hay campos para actualizar' }, { status: 400 })
+    }
+
+    values.push(id)
+    values.push(payload.companyId)
+
+    const result = await db.query(`
+      UPDATE mkt_channels
+      SET ${setClauses.join(', ')}
+      WHERE id = $${paramIndex} AND company_id = $${paramIndex + 1}
+      RETURNING id, platform, name, identifier, purpose, assigned_agent_id, member_count, status, created_at
+    `, values)
+
+    if (result.rows.length === 0) {
+      return NextResponse.json({ success: false, error: 'Canal no encontrado' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, data: result.rows[0] })
+  } catch (error) {
+    console.error('[MKT Channels PATCH]', error)
+    return NextResponse.json({ success: false, error: 'Error al actualizar canal' }, { status: 500 })
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   try {
     const payload = await getPayload()
