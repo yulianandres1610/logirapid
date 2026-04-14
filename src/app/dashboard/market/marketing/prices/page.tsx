@@ -110,7 +110,18 @@ export default function PricesPage() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
-          setFindings(result.data?.findings || [])
+          const mapped = (result.data?.findings || []).map((f: any) => ({
+            id: f.id,
+            productName: f.product_name || f.found_name || f.search_term || 'Sin nombre',
+            foundPrice: parseFloat(f.found_price) || 0,
+            ourPrice: parseFloat(f.our_price || f.current_price) || 0,
+            diffPercent: parseFloat(f.price_diff_pct) || 0,
+            source: f.source_name || '-',
+            platform: f.source_platform || 'web',
+            confidence: Math.round((parseFloat(f.match_confidence) || 0) * 100),
+            foundAt: f.captured_at || ''
+          }))
+          setFindings(mapped)
           if (result.data?.pagination) {
             setPagination(result.data.pagination)
           }
