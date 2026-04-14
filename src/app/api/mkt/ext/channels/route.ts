@@ -10,12 +10,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const purpose = searchParams.get('purpose')
 
-    const conditions: string[] = [
-      'company_id = $1',
-      '(assigned_agent_id = $2 OR assigned_agent_id IS NULL)'
-    ]
-    const params: any[] = [auth.companyId, auth.agentId]
-    let idx = 3
+    const conditions: string[] = ['company_id = $1', "status = 'active'"]
+    const params: any[] = [auth.companyId]
+    let idx = 2
 
     if (purpose) {
       conditions.push(`purpose = $${idx}`)
@@ -26,7 +23,7 @@ export async function GET(request: NextRequest) {
     const result = await db.query(`
       SELECT id, platform, name, identifier, purpose, assigned_agent_id, member_count, status, last_activity_at, metadata, created_at
       FROM mkt_channels
-      WHERE ${conditions.join(' AND ')} AND status = 'active'
+      WHERE ${conditions.join(' AND ')}
       ORDER BY name ASC
     `, params)
 
@@ -37,6 +34,7 @@ export async function GET(request: NextRequest) {
       identifier: ch.identifier,
       purpose: ch.purpose,
       assignedAgentId: ch.assigned_agent_id,
+      assignedToMe: ch.assigned_agent_id === auth.agentId || !ch.assigned_agent_id,
       memberCount: ch.member_count || 0,
       status: ch.status,
       lastActivityAt: ch.last_activity_at,
