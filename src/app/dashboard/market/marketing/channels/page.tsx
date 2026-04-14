@@ -84,7 +84,18 @@ export default function ChannelsPage() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
-          setChannels(result.data || [])
+          const mapped = (result.data || []).map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            platform: c.platform,
+            identifier: c.identifier || '',
+            purpose: c.purpose || 'general',
+            assignedAgentName: c.agent_name || null,
+            memberCount: c.member_count || 0,
+            lastActivity: c.last_activity_at || null,
+            createdAt: c.created_at || ''
+          }))
+          setChannels(mapped)
         }
       }
     } catch (error) {
