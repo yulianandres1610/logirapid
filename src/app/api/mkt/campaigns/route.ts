@@ -37,9 +37,9 @@ export async function GET(request: NextRequest) {
 
     const [dataResult, countResult] = await Promise.all([
       db.query(`
-        SELECT id, name, description, type, status, channel_id, agent_id,
-               objective, budget, start_date, end_date,
-               created_by, approved_by, approved_at,
+        SELECT id, name, description, type, status, suggested_by,
+               target_products, target_channels, discount_type, discount_value,
+               start_date, end_date, approved_by, approved_at,
                created_at, updated_at
         FROM mkt_campaigns
         WHERE ${whereClause}

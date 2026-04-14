@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
           description,
           type,
           status,
-          assigned_agent_id AS "assignedAgentId",
+          assigned_to AS "assignedTo",
           created_at AS "createdAt"
         FROM mkt_campaign_tasks
         WHERE campaign_id = ANY($1::int[])

@@ -21,20 +21,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const [campaignResult, tasksResult] = await Promise.all([
       db.query(`
-        SELECT id, name, description, type, status, channel_id, agent_id,
-               objective, budget, start_date, end_date,
-               created_by, approved_by, approved_at,
-               created_at, updated_at
+        SELECT id, name, description, type, status, suggested_by,
+               target_products, target_channels, discount_type, discount_value,
+               start_date, end_date, scripts, schedule, metrics,
+               approved_by, approved_at, created_at, updated_at
         FROM mkt_campaigns
         WHERE id = $1 AND company_id = $2
       `, [parseInt(id), payload.companyId]),
 
       db.query(`
-        SELECT id, title, description, type, status, assigned_to, file_url,
-               completed_by, completed_at, due_date, created_at
+        SELECT id, campaign_id, title, description, type, status, assigned_to,
+               sort_order, file_url, file_type, completed_by, completed_at, created_at
         FROM mkt_campaign_tasks
         WHERE campaign_id = $1
-        ORDER BY created_at ASC
+        ORDER BY sort_order ASC, created_at ASC
       `, [parseInt(id)])
     ])
 
@@ -63,13 +63,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = await params
     const body = await request.json()
 
-    const allowedFields = ['status', 'name', 'description', 'type', 'objective', 'budget', 'start_date', 'end_date', 'channel_id', 'agent_id']
+    const allowedFields = ['status', 'name', 'description', 'type', 'discount_type', 'discount_value', 'start_date', 'end_date']
     const setClauses: string[] = []
     const values: any[] = []
     let paramIndex = 1
 
     for (const field of allowedFields) {
-      // Accept both snake_case and camelCase
       const camelKey = field.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
       const value = body[field] !== undefined ? body[field] : body[camelKey]
       if (value !== undefined) {
@@ -77,6 +76,28 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         values.push(value)
         paramIndex++
       }
+    }
+
+    // Handle JSONB fields
+    if (body.targetProducts !== undefined) {
+      setClauses.push(`target_products = $${paramIndex}`)
+      values.push(JSON.stringify(body.targetProducts))
+      paramIndex++
+    }
+    if (body.targetChannels !== undefined) {
+      setClauses.push(`target_channels = $${paramIndex}`)
+      values.push(JSON.stringify(body.targetChannels))
+      paramIndex++
+    }
+    if (body.scripts !== undefined) {
+      setClauses.push(`scripts = $${paramIndex}`)
+      values.push(JSON.stringify(body.scripts))
+      paramIndex++
+    }
+    if (body.schedule !== undefined) {
+      setClauses.push(`schedule = $${paramIndex}`)
+      values.push(JSON.stringify(body.schedule))
+      paramIndex++
     }
 
     // Handle approval
@@ -104,7 +125,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       UPDATE mkt_campaigns
       SET ${setClauses.join(', ')}
       WHERE id = $${paramIndex} AND company_id = $${paramIndex + 1}
-      RETURNING id, name, description, type, status, channel_id, agent_id, objective, budget, start_date, end_date, approved_by, approved_at, updated_at
+      RETURNING id, name, description, type, status, suggested_by,
+                target_products, target_channels, discount_type, discount_value,
+                start_date, end_date, approved_by, approved_at, updated_at
     `, values)
 
     if (result.rows.length === 0) {

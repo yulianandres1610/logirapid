@@ -30,10 +30,11 @@ export async function GET() {
 
       // Activity events last 24h
       db.query(`
-        SELECT a.id, a.agent_id, a.event_type, a.event_data, a.created_at,
+        SELECT a.id, a.agent_id, a.type, a.status, a.action, a.target,
+               a.metadata, a.created_at,
                ag.name as agent_name, ag.type as agent_type
         FROM mkt_agent_activity a
-        JOIN mkt_agents ag ON ag.id = a.agent_id AND ag.company_id = $1
+        JOIN mkt_agents ag ON ag.agent_id = a.agent_id AND ag.company_id = $1
         WHERE a.company_id = $1 AND a.created_at >= NOW() - INTERVAL '24 hours'
         ORDER BY a.created_at DESC
         LIMIT 100

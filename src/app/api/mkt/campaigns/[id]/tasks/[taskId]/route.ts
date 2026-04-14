@@ -34,7 +34,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const allowedFields = ['status', 'file_url', 'completed_by', 'completed_at', 'title', 'description', 'assigned_to', 'due_date']
+    const allowedFields = ['status', 'file_url', 'file_type', 'completed_by', 'completed_at', 'title', 'description', 'assigned_to', 'sort_order']
     const setClauses: string[] = []
     const values: any[] = []
     let paramIndex = 1
@@ -61,7 +61,6 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'No hay campos para actualizar' }, { status: 400 })
     }
 
-    setClauses.push(`updated_at = NOW()`)
     values.push(taskIdInt)
     values.push(campaignId)
 
@@ -69,7 +68,7 @@ export async function PATCH(
       UPDATE mkt_campaign_tasks
       SET ${setClauses.join(', ')}
       WHERE id = $${paramIndex} AND campaign_id = $${paramIndex + 1}
-      RETURNING id, campaign_id, title, description, type, status, assigned_to, file_url, completed_by, completed_at, due_date, updated_at
+      RETURNING id, campaign_id, title, description, type, status, assigned_to, sort_order, file_url, file_type, completed_by, completed_at, created_at
     `, values)
 
     if (result.rows.length === 0) {

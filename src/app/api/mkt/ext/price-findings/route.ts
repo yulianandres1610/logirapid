@@ -70,16 +70,18 @@ export async function POST(request: NextRequest) {
       }
 
       // Calculate price diff
-      if (ourPrice !== null) {
+      let priceDiffPct: number | null = null
+      if (ourPrice !== null && ourPrice > 0) {
         priceDiff = f.foundPrice - ourPrice
+        priceDiffPct = ((f.foundPrice - ourPrice) / ourPrice) * 100
       }
 
       await db.query(`
         INSERT INTO mkt_price_findings (
           company_id, agent_id, product_id, search_term, found_name, found_price,
           currency, source_platform, source_name, source_url,
-          match_confidence, match_type, price_diff, our_price, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+          match_confidence, match_type, price_diff, price_diff_pct, our_price, captured_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
       `, [
         auth.companyId,
         auth.agentId,
@@ -94,6 +96,7 @@ export async function POST(request: NextRequest) {
         f.matchConfidence || null,
         f.matchType || null,
         priceDiff,
+        priceDiffPct,
         ourPrice
       ])
 

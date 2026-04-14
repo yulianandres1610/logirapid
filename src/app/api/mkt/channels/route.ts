@@ -19,10 +19,10 @@ export async function GET() {
 
     const result = await db.query(`
       SELECT c.id, c.platform, c.name, c.identifier, c.purpose, c.status,
-             c.assigned_agent_id, c.created_at, c.updated_at,
+             c.assigned_agent_id, c.member_count, c.last_activity_at, c.created_at,
              a.name as agent_name, a.agent_id as agent_code
       FROM mkt_channels c
-      LEFT JOIN mkt_agents a ON a.id = c.assigned_agent_id AND a.company_id = c.company_id
+      LEFT JOIN mkt_agents a ON a.agent_id = c.assigned_agent_id AND a.company_id = c.company_id
       WHERE c.company_id = $1
       ORDER BY c.created_at DESC
     `, [payload.companyId])

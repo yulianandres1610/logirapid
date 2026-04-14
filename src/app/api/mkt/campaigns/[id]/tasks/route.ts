@@ -31,7 +31,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const result = await db.query(`
       SELECT id, campaign_id, title, description, type, status, assigned_to,
-             file_url, completed_by, completed_at, due_date, created_at, updated_at
+             sort_order, file_url, file_type, completed_by, completed_at, created_at
       FROM mkt_campaign_tasks
       WHERE campaign_id = $1
       ORDER BY created_at ASC

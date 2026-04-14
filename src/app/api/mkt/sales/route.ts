@@ -45,9 +45,9 @@ export async function GET(request: NextRequest) {
             THEN ROUND(COALESCE(SUM(s.total_amount), 0) / COUNT(*), 2)
             ELSE 0
           END as avg_order_value
-        FROM mkt_agent_sales s
-        JOIN mkt_agents a ON a.id = s.agent_id AND a.company_id = s.company_id
-        WHERE s.company_id = $1 AND s.created_at >= NOW() - $2::INTERVAL
+        FROM mkt_sales s
+        JOIN mkt_agents a ON a.agent_id = s.agent_id AND a.company_id = s.company_id
+        WHERE s.company_id = $1 AND s.sale_at >= NOW() - $2::INTERVAL
         GROUP BY s.agent_id, a.name, a.agent_id, a.type
         ORDER BY total_amount DESC
       `, [payload.companyId, interval]),
@@ -61,8 +61,8 @@ export async function GET(request: NextRequest) {
             THEN ROUND(COALESCE(SUM(total_amount), 0) / COUNT(*), 2)
             ELSE 0
           END as avg_order_value
-        FROM mkt_agent_sales
-        WHERE company_id = $1 AND created_at >= NOW() - $2::INTERVAL
+        FROM mkt_sales
+        WHERE company_id = $1 AND sale_at >= NOW() - $2::INTERVAL
       `, [payload.companyId, interval])
     ])
 

@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       INSERT INTO mkt_sales (
         company_id, agent_id, customer_phone, customer_name,
         channel, total_amount, currency, items,
-        campaign_id, order_number, created_at
+        campaign_id, order_number, sale_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
       RETURNING id
     `, [
