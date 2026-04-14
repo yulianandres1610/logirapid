@@ -17,7 +17,7 @@ const PLATFORMS = ['facebook', 'instagram', 'whatsapp', 'telegram']
 const PLATFORM_FIELDS: Record<string, string[]> = {
   facebook: ['access_token', 'page_id', 'cookies'],
   instagram: ['session_id', 'cookies'],
-  whatsapp: ['phone_number', 'api_key'],
+  whatsapp: ['phone_number', 'session_data'],
   telegram: ['bot_token', 'api_id', 'api_hash']
 }
 
