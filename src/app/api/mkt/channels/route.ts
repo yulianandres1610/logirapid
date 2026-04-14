@@ -56,17 +56,16 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await db.query(`
-      INSERT INTO mkt_channels (company_id, platform, name, identifier, purpose, assigned_agent_id, status, created_by)
-      VALUES ($1, $2, $3, $4, $5, $6, 'active', $7)
+      INSERT INTO mkt_channels (company_id, platform, name, identifier, purpose, assigned_agent_id, status)
+      VALUES ($1, $2, $3, $4, $5, $6, 'active')
       RETURNING id, platform, name, identifier, purpose, assigned_agent_id, status, created_at
     `, [
       payload.companyId,
       platform,
       name,
       identifier,
-      purpose || null,
-      assignedAgentId || null,
-      payload.userId
+      purpose || 'research',
+      assignedAgentId || null
     ])
 
     return NextResponse.json({ success: true, data: result.rows[0] }, { status: 201 })

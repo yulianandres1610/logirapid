@@ -87,21 +87,19 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await db.query(`
-      INSERT INTO mkt_campaigns (company_id, name, description, type, status, channel_id, agent_id, objective, budget, start_date, end_date, created_by)
-      VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, $11)
-      RETURNING id, name, description, type, status, channel_id, agent_id, objective, budget, start_date, end_date, created_by, created_at
+      INSERT INTO mkt_campaigns (company_id, name, description, type, status, target_channels, discount_type, discount_value, start_date, end_date)
+      VALUES ($1, $2, $3, $4, 'draft', $5, $6, $7, $8, $9)
+      RETURNING id, name, description, type, status, start_date, end_date, created_at
     `, [
       payload.companyId,
       name,
       description || null,
       type,
-      channelId || null,
-      agentId || null,
-      objective || null,
-      budget || null,
-      startDate || null,
-      endDate || null,
-      payload.userId
+      JSON.stringify(body.targetChannels || []),
+      body.discountType || null,
+      body.discountValue || null,
+      body.startDate || null,
+      body.endDate || null
     ])
 
     return NextResponse.json({ success: true, data: result.rows[0] }, { status: 201 })

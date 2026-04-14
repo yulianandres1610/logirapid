@@ -58,8 +58,8 @@ export async function POST(request: NextRequest) {
     const { rawToken, tokenHash, tokenPrefix } = generateAgentToken()
 
     const result = await db.query(`
-      INSERT INTO mkt_agents (company_id, agent_id, name, type, description, channels, capabilities, token_hash, token_prefix, status, created_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', $10)
+      INSERT INTO mkt_agents (company_id, agent_id, name, type, description, channels, capabilities, token_hash, token_prefix, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active')
       RETURNING id, agent_id, name, type, description, channels, capabilities, status, token_prefix, created_at
     `, [
       payload.companyId,
@@ -67,11 +67,10 @@ export async function POST(request: NextRequest) {
       name,
       type,
       description || null,
-      channels ? JSON.stringify(channels) : null,
-      capabilities ? JSON.stringify(capabilities) : null,
+      channels ? JSON.stringify(channels) : '[]',
+      capabilities ? JSON.stringify(capabilities) : '[]',
       tokenHash,
-      tokenPrefix,
-      payload.userId
+      tokenPrefix
     ])
 
     return NextResponse.json({

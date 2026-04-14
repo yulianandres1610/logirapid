@@ -69,17 +69,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const result = await db.query(`
-      INSERT INTO mkt_campaign_tasks (campaign_id, title, description, type, status, assigned_to, due_date, created_by)
-      VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)
-      RETURNING id, campaign_id, title, description, type, status, assigned_to, due_date, created_by, created_at
+      INSERT INTO mkt_campaign_tasks (campaign_id, title, description, type, status, assigned_to, sort_order)
+      VALUES ($1, $2, $3, $4, 'pending', $5, $6)
+      RETURNING id, campaign_id, title, description, type, status, assigned_to, sort_order, created_at
     `, [
       campaignId,
       title,
       description || null,
-      type || 'general',
-      assignedTo || null,
-      dueDate || null,
-      payload.userId
+      type || 'manual',
+      assignedTo || 'team',
+      body.sortOrder || 0
     ])
 
     return NextResponse.json({ success: true, data: result.rows[0] }, { status: 201 })
