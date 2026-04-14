@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     if (!payload) return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 })
 
     const body = await request.json()
-    const { agentId, name, type, description, channels, capabilities } = body
+    const { agentId, name, type, description, channels, capabilities, config } = body
 
     if (!agentId || !name || !type) {
       return NextResponse.json({ success: false, error: 'agentId, name y type son requeridos' }, { status: 400 })
@@ -58,9 +58,9 @@ export async function POST(request: NextRequest) {
     const { rawToken, tokenHash, tokenPrefix } = generateAgentToken()
 
     const result = await db.query(`
-      INSERT INTO mkt_agents (company_id, agent_id, name, type, description, channels, capabilities, token_hash, token_prefix, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active')
-      RETURNING id, agent_id, name, type, description, channels, capabilities, status, token_prefix, created_at
+      INSERT INTO mkt_agents (company_id, agent_id, name, type, description, channels, capabilities, config, token_hash, token_prefix, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active')
+      RETURNING id, agent_id, name, type, description, channels, capabilities, config, status, token_prefix, created_at
     `, [
       payload.companyId,
       agentId,
@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
       description || null,
       channels ? JSON.stringify(channels) : '[]',
       capabilities ? JSON.stringify(capabilities) : '[]',
+      config ? JSON.stringify(config) : '{}',
       tokenHash,
       tokenPrefix
     ])

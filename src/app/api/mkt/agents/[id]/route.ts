@@ -19,7 +19,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const { id } = await params
     const body = await request.json()
-    const allowedFields = ['status', 'name', 'description', 'channels', 'capabilities']
+    const allowedFields = ['status', 'name', 'description', 'channels', 'capabilities', 'config']
 
     const setClauses: string[] = []
     const values: any[] = []
@@ -27,7 +27,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
-        const value = (field === 'channels' || field === 'capabilities')
+        const value = (field === 'channels' || field === 'capabilities' || field === 'config')
           ? JSON.stringify(body[field])
           : body[field]
         setClauses.push(`${field} = $${paramIndex}`)

@@ -708,6 +708,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         { icon: CreditCard, label: "Campañas", href: "/dashboard/market/marketing/campaigns" },
         { icon: Settings, label: "Canales", href: "/dashboard/market/marketing/channels" },
         { icon: Users, label: "Ventas IA", href: "/dashboard/market/marketing/sales" },
+        { icon: Settings, label: "Ajustes", href: "/dashboard/market/marketing/settings" },
       ]
     },
     { icon: ClipboardCheck, label: "Auditoría", href: "/dashboard/market/audits", requiredRole: 'MARKET_MANAGER' },
