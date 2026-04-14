@@ -15,8 +15,16 @@ export async function GET(request: NextRequest) {
     let idx = 2
 
     if (purpose) {
-      conditions.push(`purpose = $${idx}`)
-      params.push(purpose)
+      // Accept aliases: research/investigation are the same, all/general are the same
+      const purposeAliases: Record<string, string[]> = {
+        research: ['research', 'investigation'],
+        investigation: ['research', 'investigation'],
+        all: ['all', 'general'],
+        general: ['all', 'general']
+      }
+      const purposes = purposeAliases[purpose] || [purpose]
+      conditions.push(`purpose = ANY($${idx}::text[])`)
+      params.push(purposes)
       idx++
     }
 
