@@ -99,7 +99,29 @@ export default function CampaignsPage() {
       if (response.ok) {
         const result = await response.json()
         if (result.success) {
-          setCampaigns(result.data || [])
+          const raw = result.data?.campaigns || result.data || []
+          const mapped = (Array.isArray(raw) ? raw : []).map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            type: c.type,
+            status: c.status,
+            startDate: c.start_date || c.startDate || null,
+            endDate: c.end_date || c.endDate || null,
+            productsCount: (() => {
+              try {
+                const tp = typeof c.target_products === 'string' ? JSON.parse(c.target_products) : c.target_products
+                return Array.isArray(tp) ? tp.length : 0
+              } catch { return 0 }
+            })(),
+            channels: (() => {
+              try {
+                const tc = typeof c.target_channels === 'string' ? JSON.parse(c.target_channels) : c.target_channels
+                return Array.isArray(tc) ? tc : []
+              } catch { return [] }
+            })(),
+            createdAt: c.created_at || c.createdAt || ''
+          }))
+          setCampaigns(mapped)
         }
       }
     } catch (error) {
