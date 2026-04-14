@@ -30,13 +30,13 @@ export async function GET(request: NextRequest) {
     let paramIndex = 2
 
     if (search) {
-      conditions.push(`(f.product_name ILIKE $${paramIndex} OR f.competitor_name ILIKE $${paramIndex})`)
+      conditions.push(`(f.search_term ILIKE $${paramIndex} OR f.found_name ILIKE $${paramIndex} OR f.source_name ILIKE $${paramIndex})`)
       values.push(`%${search}%`)
       paramIndex++
     }
 
     if (platform) {
-      conditions.push(`f.platform = $${paramIndex}`)
+      conditions.push(`f.source_platform = $${paramIndex}`)
       values.push(platform)
       paramIndex++
     }
@@ -51,15 +51,15 @@ export async function GET(request: NextRequest) {
 
     const [dataResult, countResult] = await Promise.all([
       db.query(`
-        SELECT f.id, f.product_id, f.product_name, f.our_price, f.competitor_price,
-               f.competitor_name, f.platform, f.match_type, f.match_confidence,
-               f.product_url, f.price_difference, f.price_difference_pct,
-               f.agent_id, f.created_at,
-               p.name as market_product_name, p.price as current_our_price
+        SELECT f.id, f.product_id, f.search_term, f.found_name, f.found_price,
+               f.currency, f.source_platform, f.source_name, f.source_url,
+               f.match_type, f.match_confidence, f.our_price,
+               f.price_diff, f.price_diff_pct, f.agent_id, f.captured_at,
+               p.name as product_name, p.selling_price as current_price
         FROM mkt_price_findings f
-        LEFT JOIN mkt_market_products p ON p.id = f.product_id AND p.company_id = f.company_id
+        LEFT JOIN market_products p ON p.id = f.product_id
         WHERE ${whereClause}
-        ORDER BY f.created_at DESC
+        ORDER BY f.captured_at DESC
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `, [...values, limit, offset]),
 

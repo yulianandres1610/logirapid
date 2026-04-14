@@ -24,29 +24,24 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await db.query(`
-      SELECT
-        id,
-        name,
-        platform,
-        channel_type AS "channelType",
-        purpose,
-        config,
-        assigned_agent_id AS "assignedAgentId",
-        is_active AS "isActive",
-        created_at AS "createdAt"
+      SELECT id, platform, name, identifier, purpose, assigned_agent_id, member_count, status, last_activity_at, metadata, created_at
       FROM mkt_channels
-      WHERE ${conditions.join(' AND ')}
-        AND is_active = true
+      WHERE ${conditions.join(' AND ')} AND status = 'active'
       ORDER BY name ASC
     `, params)
 
-    // Parse config JSON
-    const channels = result.rows.map((ch: any) => {
-      if (typeof ch.config === 'string') {
-        try { ch.config = JSON.parse(ch.config) } catch { /* keep as string */ }
-      }
-      return ch
-    })
+    const channels = result.rows.map((ch: any) => ({
+      id: ch.id,
+      platform: ch.platform,
+      name: ch.name,
+      identifier: ch.identifier,
+      purpose: ch.purpose,
+      assignedAgentId: ch.assigned_agent_id,
+      memberCount: ch.member_count || 0,
+      status: ch.status,
+      lastActivityAt: ch.last_activity_at,
+      createdAt: ch.created_at
+    }))
 
     return NextResponse.json({
       success: true,

@@ -42,16 +42,12 @@ export async function POST(request: NextRequest) {
       UPDATE mkt_agents
       SET is_online = true,
           last_heartbeat_at = NOW(),
-          current_status = $2,
-          current_action = $3,
-          stats = COALESCE(stats, '{}'::jsonb) || $4::jsonb,
+          stats = COALESCE(stats, '{}'::jsonb) || $2::jsonb,
           updated_at = NOW()
-      WHERE agent_id = $1 AND company_id = $5
+      WHERE agent_id = $1 AND company_id = $3
     `, [
       auth.agentId,
-      status,
-      action || null,
-      JSON.stringify(statsUpdate),
+      JSON.stringify({ ...statsUpdate, currentStatus: status, currentAction: action }),
       auth.companyId
     ])
 

@@ -42,15 +42,15 @@ export async function GET() {
       db.query(`
         SELECT COUNT(*) as count
         FROM mkt_price_findings
-        WHERE company_id = $1 AND created_at >= NOW() - INTERVAL '7 days'
+        WHERE company_id = $1 AND captured_at >= NOW() - INTERVAL '7 days'
       `, [companyId]),
 
       // Active campaigns
       db.query(`
         SELECT
           COUNT(*) as total,
-          COUNT(*) FILTER (WHERE status = 'active') as active,
-          COUNT(*) FILTER (WHERE status = 'pending') as pending,
+          COUNT(*) FILTER (WHERE status IN ('approved','in_progress','publishing')) as active,
+          COUNT(*) FILTER (WHERE status = 'pending_approval') as pending,
           COUNT(*) FILTER (WHERE status = 'completed') as completed
         FROM mkt_campaigns
         WHERE company_id = $1
@@ -61,8 +61,8 @@ export async function GET() {
         SELECT
           COALESCE(SUM(total_amount), 0) as total_amount,
           COUNT(*) as total_sales
-        FROM mkt_agent_sales
-        WHERE company_id = $1 AND created_at >= NOW() - INTERVAL '30 days'
+        FROM mkt_sales
+        WHERE company_id = $1 AND sale_at >= NOW() - INTERVAL '30 days'
       `, [companyId]),
 
       // Products tracked (distinct product_id in findings)
@@ -72,14 +72,14 @@ export async function GET() {
         WHERE company_id = $1
       `, [companyId]),
 
-      // Price positioning (cheaper/same/expensive counts)
+      // Price positioning based on price_diff_pct
       db.query(`
         SELECT
-          COUNT(*) FILTER (WHERE match_type = 'cheaper') as cheaper,
-          COUNT(*) FILTER (WHERE match_type = 'same') as same,
-          COUNT(*) FILTER (WHERE match_type = 'expensive') as expensive
+          COUNT(*) FILTER (WHERE price_diff_pct > 5) as cheaper,
+          COUNT(*) FILTER (WHERE price_diff_pct BETWEEN -5 AND 5) as same,
+          COUNT(*) FILTER (WHERE price_diff_pct < -5) as expensive
         FROM mkt_price_findings
-        WHERE company_id = $1 AND created_at >= NOW() - INTERVAL '7 days'
+        WHERE company_id = $1 AND captured_at >= NOW() - INTERVAL '7 days' AND price_diff_pct IS NOT NULL
       `, [companyId])
     ])
 

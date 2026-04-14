@@ -20,31 +20,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'name y type son requeridos' }, { status: 400 })
     }
 
-    // Insert campaign with status pending_approval
     const campaignResult = await db.query(`
       INSERT INTO mkt_campaigns (
-        company_id, created_by_agent_id, name, description, type, status,
-        target_products, target_channels,
-        discount_type, discount_value,
-        start_date, end_date,
-        scripts, schedule, metrics,
-        created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, 'pending_approval', $6, $7, $8, $9, $10, $11, $12, $13, '{}'::jsonb, NOW(), NOW())
+        company_id, suggested_by, name, description, type, status,
+        target_products, target_channels, discount_type, discount_value,
+        start_date, end_date, scripts, schedule
+      ) VALUES ($1, $2, $3, $4, $5, 'pending_approval', $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING id
     `, [
-      auth.companyId,
-      auth.agentId,
-      name,
-      description || null,
-      type,
-      targetProducts ? JSON.stringify(targetProducts) : null,
-      targetChannels ? JSON.stringify(targetChannels) : null,
-      discountType || null,
-      discountValue || null,
-      startDate || null,
-      endDate || null,
-      scripts ? JSON.stringify(scripts) : null,
-      schedule ? JSON.stringify(schedule) : null,
+      auth.companyId, auth.agentId, name, description || null, type,
+      JSON.stringify(targetProducts || []), JSON.stringify(targetChannels || []),
+      discountType || null, discountValue || null,
+      startDate || null, endDate || null,
+      JSON.stringify(scripts || {}), JSON.stringify(schedule || {})
     ])
 
     const campaignId = campaignResult.rows[0].id
@@ -58,21 +46,15 @@ export async function POST(request: NextRequest) {
 
       for (const task of tasks) {
         if (!task.title) continue
-        placeholders.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4}, 'pending', NOW(), NOW())`)
-        values.push(
-          campaignId,
-          auth.companyId,
-          task.title,
-          task.description || null,
-          task.type || 'general',
-        )
-        idx += 5
+        placeholders.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, 'pending', ${tasksInserted})`)
+        values.push(campaignId, task.title, task.description || null, task.type || 'manual')
+        idx += 4
         tasksInserted++
       }
 
       if (placeholders.length > 0) {
         await db.query(`
-          INSERT INTO mkt_campaign_tasks (campaign_id, company_id, title, description, type, status, created_at, updated_at)
+          INSERT INTO mkt_campaign_tasks (campaign_id, title, description, type, status, sort_order)
           VALUES ${placeholders.join(', ')}
         `, values)
       }
