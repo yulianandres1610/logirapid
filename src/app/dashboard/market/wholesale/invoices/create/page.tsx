@@ -957,7 +957,7 @@ export default function CreateInvoicePage() {
     const deliveryMap = new Map<number, {
       warehouseId: number
       warehouseName: string
-      products: Array<{ name: string; quantity: number }>
+      products: Array<{ name: string; sku: string; barcode: string; quantity: number }>
     }>()
 
     for (const line of lines) {
@@ -976,6 +976,8 @@ export default function CreateInvoicePage() {
 
         deliveryMap.get(warehouseId)!.products.push({
           name: line.productName,
+          sku: line.productSku || '',
+          barcode: line.productSku || '',
           quantity: qty
         })
       }

@@ -23,6 +23,8 @@ import { generateSessionCloseEscpos } from './escpos/session-close'
 import { generateProductionFormulaEscpos } from './escpos/production-formula'
 import { generateProductionOrderPdf } from './pdf/production-order'
 import { generateWeightLabelPdf } from './pdf/weight-label'
+import { generateWarehousePickupTicketPdf } from './pdf/warehouse-pickup-ticket'
+import { generateWarehousePickupTicketEscpos } from './escpos/warehouse-pickup-ticket'
 
 interface GenerateResult {
   format: 'escpos' | 'zpl' | 'tspl' | 'pdf'
@@ -87,10 +89,10 @@ export async function generateDocument(
 
     case 'warehouse_pickup_ticket':
       if (isThermal) {
-        buffer = generateWholesaleInvoiceEscpos(documentData as any)
+        buffer = generateWarehousePickupTicketEscpos(documentData as any)
         format = 'escpos'
       } else {
-        buffer = await generateWholesaleInvoicePdf(documentData as any)
+        buffer = await generateWarehousePickupTicketPdf(documentData as any)
         format = 'pdf'
       }
       break
