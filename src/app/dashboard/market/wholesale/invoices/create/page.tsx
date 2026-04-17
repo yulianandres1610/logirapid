@@ -186,6 +186,14 @@ export default function CreateInvoicePage() {
   const { theme } = useTheme()
   const preselectedCustomerId = searchParams.get('customerId')
 
+  // Role check for admin price editing
+  const [userRole, setUserRole] = useState('')
+  useEffect(() => {
+    const roleCookie = document.cookie.split('; ').find(c => c.startsWith('user-role='))
+    if (roleCookie) setUserRole(roleCookie.split('=')[1] || '')
+  }, [])
+  const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN'
+
   // Read initial step from URL
   const initialStep = searchParams.get('step') || 'type'
   const validSteps = STEPS.map(s => s.id)
@@ -860,6 +868,22 @@ export default function CreateInvoicePage() {
 
     // Expand the newly added line
     setExpandedLineIndex(lines.length)
+  }
+
+  // Admin-only: manual price override
+  const updateLinePrice = (lineIndex: number, newPrice: number) => {
+    if (!isAdmin) return
+    const newLines = [...lines]
+    const line = newLines[lineIndex]
+    line.previousUnitPrice = line.unitPrice
+    line.unitPrice = newPrice
+    line.unitPriceCup = Math.round(newPrice * exchangeRateWholesale)
+    line.subtotal = line.quantity * newPrice
+    line.subtotalCup = line.unitPriceCup * line.quantity
+    line.profitMargin = line.costPrice > 0 ? ((newPrice - line.costPrice) / line.costPrice) * 100 : 0
+    line.hasPricelistPrice = false
+    line.pricelistDiscountInfo = 'Precio manual (Admin)'
+    setLines(newLines)
   }
 
   const updateWarehouseQuantity = (lineIndex: number, warehouseId: number, quantity: number) => {
@@ -1938,7 +1962,33 @@ export default function CreateInvoicePage() {
                               </div>
                             </div>
                             <div className="col-span-2 text-right">
-                              {line.hasPricelistPrice ? (
+                              {isAdmin ? (
+                                <div>
+                                  {line.originalPrice !== line.unitPrice && (
+                                    <span className="text-xs text-gray-400 line-through block">
+                                      {formatCurrency(line.originalPrice)}
+                                    </span>
+                                  )}
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={line.unitPrice}
+                                    onChange={e => {
+                                      const idx = lines.findIndex(l => l.productId === line.productId)
+                                      if (idx >= 0) updateLinePrice(idx, parseFloat(e.target.value) || 0)
+                                    }}
+                                    className={cn(
+                                      'w-20 px-1.5 py-0.5 rounded-lg border text-sm font-medium text-right text-green-600',
+                                      theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-green-50 border-green-200'
+                                    )}
+                                    title="Precio editable (Admin)"
+                                  />
+                                  {line.pricelistDiscountInfo && (
+                                    <span className="text-[10px] text-gray-400 block mt-0.5">{line.pricelistDiscountInfo}</span>
+                                  )}
+                                </div>
+                              ) : line.hasPricelistPrice ? (
                                 <div title={line.pricelistDiscountInfo || ''}>
                                   <span className="text-xs text-gray-400 line-through block">
                                     {formatCurrency(line.originalPrice)}
