@@ -3332,26 +3332,36 @@ export default function CreateInvoicePage() {
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={() => {
-                        setPrintDocType('wholesale_invoice')
-                        setPrintDocData({
+                        const invoicePrintData = {
                           invoiceNumber: createdInvoice.invoiceNumber,
-                          customerName: createdInvoice.customerName,
-                          customerCode: createdInvoice.customerCode,
+                          customer: {
+                            code: createdInvoice.customerCode || '',
+                            name: createdInvoice.customerName || ''
+                          },
                           lines: lines.map(l => ({
                             productName: l.productName,
                             productSku: l.productSku,
                             quantity: l.quantity,
                             unitPrice: l.unitPrice,
+                            discountPercent: 0,
+                            discountAmount: 0,
                             subtotal: l.subtotal
                           })),
                           subtotal: createdInvoice.total,
-                          total: createdInvoice.total,
+                          totalAmount: createdInvoice.total,
+                          discountPercent: 0,
+                          discountAmount: 0,
+                          amountPaid: createdInvoice.paymentStatus === 'paid' ? createdInvoice.total : 0,
+                          amountDue: createdInvoice.paymentStatus === 'paid' ? 0 : createdInvoice.total,
+                          currency: 'USD',
+                          status: 'confirmed',
                           exchangeRate: exchangeRateWholesale,
                           warehouseName: '',
                           createdAt: createdInvoice.createdAt || new Date().toISOString(),
-                          paymentStatus: createdInvoice.paymentStatus,
-                          includeTax
-                        })
+                          paymentStatus: createdInvoice.paymentStatus
+                        }
+                        setPrintDocType('wholesale_invoice')
+                        setPrintDocData(invoicePrintData)
                         setPrintDocTitle(`Recibo ${createdInvoice.invoiceNumber}`)
                         setPrintSourceId(createdInvoice.id)
                         setShowPrintModal(true)
@@ -3369,26 +3379,36 @@ export default function CreateInvoicePage() {
                     </button>
                     <button
                       onClick={() => {
-                        setPrintDocType('wholesale_invoice')
-                        setPrintDocData({
+                        const invoicePrintData = {
                           invoiceNumber: createdInvoice.invoiceNumber,
-                          customerName: createdInvoice.customerName,
-                          customerCode: createdInvoice.customerCode,
+                          customer: {
+                            code: createdInvoice.customerCode || '',
+                            name: createdInvoice.customerName || ''
+                          },
                           lines: lines.map(l => ({
                             productName: l.productName,
                             productSku: l.productSku,
                             quantity: l.quantity,
                             unitPrice: l.unitPrice,
+                            discountPercent: 0,
+                            discountAmount: 0,
                             subtotal: l.subtotal
                           })),
                           subtotal: createdInvoice.total,
-                          total: createdInvoice.total,
+                          totalAmount: createdInvoice.total,
+                          discountPercent: 0,
+                          discountAmount: 0,
+                          amountPaid: createdInvoice.paymentStatus === 'paid' ? createdInvoice.total : 0,
+                          amountDue: createdInvoice.paymentStatus === 'paid' ? 0 : createdInvoice.total,
+                          currency: 'USD',
+                          status: 'confirmed',
                           exchangeRate: exchangeRateWholesale,
                           warehouseName: '',
                           createdAt: createdInvoice.createdAt || new Date().toISOString(),
-                          paymentStatus: createdInvoice.paymentStatus,
-                          includeTax
-                        })
+                          paymentStatus: createdInvoice.paymentStatus
+                        }
+                        setPrintDocType('wholesale_invoice')
+                        setPrintDocData(invoicePrintData)
                         setPrintDocTitle(`Factura ${createdInvoice.invoiceNumber}`)
                         setPrintSourceId(createdInvoice.id)
                         setShowPrintModal(true)

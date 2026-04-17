@@ -38,7 +38,7 @@ export async function generateWarehousePickupTicketPdf(data: WarehousePickupTick
   const displayName = data.brandDisplayName || 'LogiRapid'
   const invoiceNumber = data.invoiceNumber || 'Sin numero'
   const dateStr = formatDate(data.createdAt)
-  const primaryColor = data.brandPrimaryColor ? hexToRgb(data.brandPrimaryColor) : rgb(0.06, 0.47, 0.53)
+  const primaryColor = data.brandPrimaryColor ? hexToRgb(data.brandPrimaryColor) : rgb(0.92, 0.36, 0.05)
 
   const pdfDoc = await PDFDocument.create()
   const page = pdfDoc.addPage([612, 792]) // Letter

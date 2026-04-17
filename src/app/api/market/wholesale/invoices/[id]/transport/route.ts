@@ -19,6 +19,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { id } = await params
 
+    // Auto-create table if not exists
+    try {
+      await db.query(`CREATE TABLE IF NOT EXISTS market_invoice_transports (
+        id SERIAL PRIMARY KEY, invoice_id INTEGER NOT NULL, company_id INTEGER NOT NULL,
+        transport_number VARCHAR(50), driver_name VARCHAR(255) NOT NULL, driver_lastname VARCHAR(255) NOT NULL,
+        driver_id_card VARCHAR(20) NOT NULL, vehicle_brand VARCHAR(100), vehicle_plate VARCHAR(20) NOT NULL,
+        amount DECIMAL(12,4) DEFAULT 0, currency VARCHAR(10) DEFAULT 'CUP', exchange_rate DECIMAL(12,4) DEFAULT 0,
+        notes TEXT, status VARCHAR(20) DEFAULT 'active', created_by INTEGER, created_at TIMESTAMP DEFAULT NOW()
+      )`)
+    } catch {}
+
     const result = await db.query(`
       SELECT t.*, u.email as created_by_email
       FROM market_invoice_transports t
@@ -44,7 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Verify invoice exists and belongs to company
     const invoiceCheck = await db.query(
-      'SELECT id, invoice_number FROM market_wholesale_invoices WHERE id = $1 AND company_id = $2',
+      'SELECT id, invoice_number FROM market_invoices WHERE id = $1 AND company_id = $2',
       [invoiceId, payload.companyId]
     )
     if (invoiceCheck.rows.length === 0) {
