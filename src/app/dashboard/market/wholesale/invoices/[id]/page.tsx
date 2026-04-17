@@ -38,6 +38,7 @@ import { detectBrandFromHost, brands } from '@/lib/brand-config'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { ProtectedRoute } from '@/components/protected-route'
 import { useTheme } from '@/contexts/theme-context'
+import PrintDocumentModal from '@/components/print/PrintDocumentModal'
 import { cn } from '@/lib/utils'
 
 interface InvoiceLine {
@@ -262,6 +263,93 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [savingPayment, setSavingPayment] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [rates, setRates] = useState({ CUP: 300, MLC: 1.2 })
+
+  // Transport state
+  const [transports, setTransports] = useState<any[]>([])
+  const [showTransportModal, setShowTransportModal] = useState(false)
+  const [savingTransport, setSavingTransport] = useState(false)
+  const [trDriverName, setTrDriverName] = useState('')
+  const [trDriverLastname, setTrDriverLastname] = useState('')
+  const [trDriverIdCard, setTrDriverIdCard] = useState('')
+  const [trVehicleBrand, setTrVehicleBrand] = useState('')
+  const [trVehiclePlate, setTrVehiclePlate] = useState('')
+  const [trAmount, setTrAmount] = useState('')
+  const [trNotes, setTrNotes] = useState('')
+
+  // Print transport
+  const [showPrintTransport, setShowPrintTransport] = useState(false)
+  const [printTransportData, setPrintTransportData] = useState<any>(null)
+
+  // Fetch transports when tab changes
+  useEffect(() => {
+    if (activeTab === 'transport' && invoice) {
+      fetchTransports()
+    }
+  }, [activeTab, invoice?.id])
+
+  const fetchTransports = async () => {
+    try {
+      const res = await fetch(`/api/market/wholesale/invoices/${invoiceId}/transport`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) setTransports(data.data || [])
+      }
+    } catch {}
+  }
+
+  const handleSaveTransport = async () => {
+    if (!trDriverName.trim() || !trDriverLastname.trim() || !trDriverIdCard.trim() || !trVehiclePlate.trim()) return
+    setSavingTransport(true)
+    try {
+      const res = await fetch(`/api/market/wholesale/invoices/${invoiceId}/transport`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driverName: trDriverName.trim(),
+          driverLastname: trDriverLastname.trim(),
+          driverIdCard: trDriverIdCard.trim(),
+          vehicleBrand: trVehicleBrand.trim(),
+          vehiclePlate: trVehiclePlate.trim(),
+          amount: parseFloat(trAmount) || 0,
+          exchangeRate: rates.CUP,
+          notes: trNotes.trim()
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setShowTransportModal(false)
+        setTrDriverName(''); setTrDriverLastname(''); setTrDriverIdCard('')
+        setTrVehicleBrand(''); setTrVehiclePlate(''); setTrAmount(''); setTrNotes('')
+        fetchTransports()
+      }
+    } catch {} finally { setSavingTransport(false) }
+  }
+
+  const handlePrintTransport = (transport: any) => {
+    if (!invoice) return
+    setPrintTransportData({
+      transportNumber: transport.transport_number,
+      invoiceNumber: invoice.invoiceNumber,
+      customer: {
+        name: invoice.customer.businessName,
+        code: invoice.customer.code,
+        phone: invoice.customer.phone,
+        address: invoice.customer.address
+      },
+      driver: {
+        name: transport.driver_name,
+        lastname: transport.driver_lastname,
+        idCard: transport.driver_id_card,
+        vehicleBrand: transport.vehicle_brand || '',
+        vehiclePlate: transport.vehicle_plate
+      },
+      amount: parseFloat(transport.amount) || 0,
+      exchangeRate: parseFloat(transport.exchange_rate) || rates.CUP,
+      createdAt: transport.created_at,
+      notes: transport.notes
+    })
+    setShowPrintTransport(true)
+  }
 
   // Fetch exchange rates
   useEffect(() => {
@@ -968,7 +1056,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
               {[
                 { key: 'details', label: 'Detalles', icon: FileText },
                 { key: 'deliveries', label: 'Entregas', icon: Truck, count: invoice.deliveries.length },
-                { key: 'payments', label: 'Pagos', icon: CreditCard, count: invoice.payments.length }
+                { key: 'payments', label: 'Pagos', icon: CreditCard, count: invoice.payments.length },
+                { key: 'transport', label: 'Transporte', icon: Truck }
               ].map(tab => {
                 const TabIcon = tab.icon
                 return (
@@ -1695,8 +1784,213 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                   )}
                 </motion.div>
               )}
+              {/* Transport Tab */}
+              {activeTab === 'transport' && (
+                <motion.div key="transport" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className={cn('text-lg font-bold', theme === 'dark' ? 'text-white' : 'text-gray-900')}>Transporte</h3>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowTransportModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25"
+                    >
+                      <Plus className="w-4 h-4" /> Crear Transporte
+                    </motion.button>
+                  </div>
+
+                  {transports.length === 0 ? (
+                    <div className={cn('rounded-2xl border p-12 text-center', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+                      <Truck className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                      <p className="text-gray-500 dark:text-gray-400 font-medium">Sin transportes registrados</p>
+                      <p className="text-sm text-gray-400 mt-1">Crea un transporte para esta factura</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {transports.map((t: any, i: number) => (
+                        <motion.div
+                          key={t.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.05 }}
+                          className={cn('rounded-xl border p-4', theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                                <Truck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-gray-900 dark:text-white">{t.transport_number}</p>
+                                <p className="text-xs text-gray-500">{t.driver_name} {t.driver_lastname} · CI: {t.driver_id_card}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-bold text-emerald-600 dark:text-emerald-400">
+                                {Math.round(parseFloat(t.amount) || 0).toLocaleString('es-ES')} CUP
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {new Date(t.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div>
+                              <p className="text-xs text-gray-400">Vehiculo</p>
+                              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.vehicle_brand || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-400">Placa</p>
+                              <p className="text-sm font-bold text-gray-900 dark:text-white">{t.vehicle_plate}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-400">Carnet</p>
+                              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.driver_id_card}</p>
+                            </div>
+                            <div className="flex items-end justify-end">
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => handlePrintTransport(t)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                              >
+                                <Printer className="w-3.5 h-3.5" /> Imprimir Factura
+                              </motion.button>
+                            </div>
+                          </div>
+
+                          {t.notes && (
+                            <p className="mt-2 text-xs text-gray-400 italic">{t.notes}</p>
+                          )}
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              )}
             </AnimatePresence>
           </div>
+
+          {/* Transport Modal */}
+          <AnimatePresence>
+            {showTransportModal && invoice && (
+              <>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  onClick={() => setShowTransportModal(false)}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" />
+                <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <div className={cn("w-full max-w-lg rounded-2xl shadow-2xl border max-h-[90vh] overflow-y-auto",
+                    theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  )} onClick={(e) => e.stopPropagation()}>
+                    <div className={cn("px-6 py-4 border-b flex items-center justify-between sticky top-0 z-10",
+                      theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white')}>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                          <Truck className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className={cn("font-semibold", theme === 'dark' ? 'text-white' : 'text-gray-900')}>Crear Transporte</h3>
+                          <p className="text-xs text-gray-500">Factura {invoice.invoiceNumber}</p>
+                        </div>
+                      </div>
+                      <button onClick={() => setShowTransportModal(false)}
+                        className={cn("p-2 rounded-lg", theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100')}>
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="p-6 space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Nombre *</label>
+                          <input type="text" value={trDriverName} onChange={e => setTrDriverName(e.target.value)}
+                            placeholder="Nombre del chofer"
+                            className={cn('w-full px-3 py-2 rounded-xl border text-sm', theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200')} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Apellidos *</label>
+                          <input type="text" value={trDriverLastname} onChange={e => setTrDriverLastname(e.target.value)}
+                            placeholder="Apellidos"
+                            className={cn('w-full px-3 py-2 rounded-xl border text-sm', theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200')} />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Carnet de Identidad *</label>
+                        <input type="text" value={trDriverIdCard} onChange={e => setTrDriverIdCard(e.target.value)}
+                          placeholder="00000000000" maxLength={11}
+                          className={cn('w-full px-3 py-2 rounded-xl border text-sm font-mono', theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200')} />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Marca de Vehiculo</label>
+                          <input type="text" value={trVehicleBrand} onChange={e => setTrVehicleBrand(e.target.value)}
+                            placeholder="ej: Hyundai, Toyota"
+                            className={cn('w-full px-3 py-2 rounded-xl border text-sm', theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200')} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Placa *</label>
+                          <input type="text" value={trVehiclePlate} onChange={e => setTrVehiclePlate(e.target.value.toUpperCase())}
+                            placeholder="P123456"
+                            className={cn('w-full px-3 py-2 rounded-xl border text-sm font-mono uppercase', theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200')} />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Monto del Transporte (CUP)</label>
+                        <input type="number" value={trAmount} onChange={e => setTrAmount(e.target.value)}
+                          placeholder="0"
+                          className={cn('w-full px-3 py-2 rounded-xl border text-sm', theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200')} />
+                        {trAmount && parseFloat(trAmount) > 0 && rates.CUP > 0 && (
+                          <p className="text-xs text-gray-400 mt-1">~${(parseFloat(trAmount) / rates.CUP).toFixed(2)} USD (tasa: {rates.CUP})</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Observaciones</label>
+                        <textarea value={trNotes} onChange={e => setTrNotes(e.target.value)}
+                          placeholder="Notas adicionales..." rows={2}
+                          className={cn('w-full px-3 py-2 rounded-xl border text-sm resize-none', theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200')} />
+                      </div>
+                    </div>
+
+                    <div className={cn("px-6 py-4 border-t flex gap-3", theme === 'dark' ? 'border-gray-700' : 'border-gray-200')}>
+                      <button onClick={() => setShowTransportModal(false)}
+                        className={cn('py-3 px-4 rounded-xl font-medium', theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700')}>
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleSaveTransport}
+                        disabled={savingTransport || !trDriverName.trim() || !trDriverLastname.trim() || !trDriverIdCard.trim() || !trVehiclePlate.trim()}
+                        className="flex-1 py-3 rounded-xl font-medium bg-gradient-to-r from-emerald-500 to-teal-500 text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {savingTransport ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                        {savingTransport ? 'Guardando...' : 'Crear Transporte'}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+
+          {/* Print Transport Modal */}
+          {showPrintTransport && printTransportData && (
+            <PrintDocumentModal
+              isOpen={showPrintTransport}
+              onClose={() => setShowPrintTransport(false)}
+              documentType={'transport_invoice' as any}
+              documentData={printTransportData}
+              documentTitle={`Factura Transporte ${printTransportData.transportNumber}`}
+              sourceType="transport"
+              sourceId={parseInt(invoiceId)}
+            />
+          )}
 
           {/* Payment Modal */}
           <AnimatePresence>

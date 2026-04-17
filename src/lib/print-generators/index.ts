@@ -25,6 +25,7 @@ import { generateProductionOrderPdf } from './pdf/production-order'
 import { generateWeightLabelPdf } from './pdf/weight-label'
 import { generateWarehousePickupTicketPdf } from './pdf/warehouse-pickup-ticket'
 import { generateWarehousePickupTicketEscpos } from './escpos/warehouse-pickup-ticket'
+import { generateTransportInvoicePdf } from './pdf/transport-invoice'
 
 interface GenerateResult {
   format: 'escpos' | 'zpl' | 'tspl' | 'pdf'
@@ -209,6 +210,11 @@ export async function generateDocument(
     case 'production_formula':
       buffer = generateProductionFormulaEscpos(documentData as any)
       format = 'escpos'
+      break
+
+    case 'transport_invoice':
+      buffer = await generateTransportInvoicePdf(documentData as any)
+      format = 'pdf'
       break
 
     default:
