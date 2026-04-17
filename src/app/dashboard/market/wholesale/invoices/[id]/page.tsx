@@ -1756,9 +1756,12 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                           </div>
                           <div className="text-right">
                             {(() => {
-                              const origMatch = payment.notes?.match(/Original: (.+?)(\s*\||$)/)
-                              const originalAmount = origMatch?.[1]
-                              const isForeignCurrency = payment.currency && payment.currency !== 'USD'
+                              // Parse original amount from notes: "Original: 14,679 CUP"
+                              const origMatch = payment.notes?.match(/Original:\s*(.+?)\s*(CUP|MLC|USD)/)
+                              const originalAmount = origMatch ? `${origMatch[1]} ${origMatch[2]}` : null
+                              const origCurrency = origMatch?.[2]
+                              // Determine if payment was in foreign currency
+                              const isForeignCurrency = origCurrency && origCurrency !== 'USD'
                               return (
                                 <>
                                   {isForeignCurrency && originalAmount ? (
