@@ -1755,14 +1755,29 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-2xl font-bold text-emerald-600">
-                              {formatCurrency(payment.amount)}
-                            </p>
-                            {payment.notes && payment.notes.includes('Original:') && (
-                              <p className="text-sm font-medium text-blue-500">
-                                {payment.notes.match(/Original: (.+)/)?.[1]}
-                              </p>
-                            )}
+                            {(() => {
+                              const origMatch = payment.notes?.match(/Original: (.+?)(\s*\||$)/)
+                              const originalAmount = origMatch?.[1]
+                              const isForeignCurrency = payment.currency && payment.currency !== 'USD'
+                              return (
+                                <>
+                                  {isForeignCurrency && originalAmount ? (
+                                    <>
+                                      <p className="text-2xl font-bold text-emerald-600">
+                                        {originalAmount}
+                                      </p>
+                                      <p className="text-xs text-gray-400">
+                                        ({formatCurrency(payment.amount)} USD)
+                                      </p>
+                                    </>
+                                  ) : (
+                                    <p className="text-2xl font-bold text-emerald-600">
+                                      {formatCurrency(payment.amount)}
+                                    </p>
+                                  )}
+                                </>
+                              )
+                            })()}
                             <p className="text-xs text-gray-500 mt-0.5">
                               {formatDate(payment.paymentDate)}
                             </p>
