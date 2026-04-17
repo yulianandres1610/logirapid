@@ -324,13 +324,16 @@ export async function POST(request: NextRequest) {
     // - With downpayment paid: confirmed + partial
     // Paid invoices → confirmed (auto-creates delivery)
     // Unpaid invoices → draft (needs manual confirm to create delivery)
-    const initialStatus = hasImmediatePayment ? 'confirmed' : 'draft'
-    const initialPaymentStatus = hasImmediatePayment
-      ? (hasDownpayment && payment.amount < totalAmount ? 'partial' : 'paid')
-      : 'pending'
+    // Zero-amount invoices → confirmed + paid (gifts/at-cost with $0)
+    const isZeroInvoice = totalAmount <= 0
+    const initialStatus = (hasImmediatePayment || isZeroInvoice) ? 'confirmed' : 'draft'
+    const initialPaymentStatus = isZeroInvoice ? 'paid'
+      : hasImmediatePayment
+        ? (hasDownpayment && payment.amount < totalAmount ? 'partial' : 'paid')
+        : 'pending'
     const paidAmount = hasImmediatePayment ? (hasDownpayment ? downpaymentAmount : totalAmount) : 0
-    const initialAmountDue = totalAmount - paidAmount
-    const initialAmountPaid = paidAmount
+    const initialAmountDue = isZeroInvoice ? 0 : totalAmount - paidAmount
+    const initialAmountPaid = isZeroInvoice ? 0 : paidAmount
 
     // Create invoice using transaction
     const result = await db.transaction(async (client) => {

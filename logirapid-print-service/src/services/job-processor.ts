@@ -531,6 +531,19 @@ class JobProcessor {
         console.log(`[Job Processor] Generating ${job.documentType} as PDF`)
         return generateProductionOrderPdf(data as unknown as ProductionOrderPdfData)
 
+      case 'warehouse_pickup_ticket':
+        // Warehouse pickup ticket - ESC/POS for thermal, PDF for standard
+        if (printer.printerType === 'thermal_80mm' || printer.supportsEscpos) {
+          console.log(`[Job Processor] Using ESC/POS format for warehouse pickup ticket`)
+          return generateWholesaleInvoiceEscpos(data as unknown as WholesaleInvoiceData)
+        }
+        console.log(`[Job Processor] Using PDF format for warehouse pickup ticket`)
+        return generateWholesaleInvoicePdf(data as unknown as WholesaleInvoicePdfData)
+
+      case 'transport_invoice':
+        console.log(`[Job Processor] Using PDF format for transport invoice`)
+        return generateWholesaleInvoicePdf(data as unknown as WholesaleInvoicePdfData)
+
       default:
         console.error(`[Job Processor] Unknown document type: ${job.documentType}`)
         return null
@@ -571,8 +584,8 @@ class JobProcessor {
     // ESC/POS documents that should always use raw printing on thermal printers
     const escposDocuments = [
       'pos_receipt', 'unified_reception', 'purchase_invoice', 'invoice',
-      'consignment_receipt', 'wholesale_invoice', 'production_order',
-      'production_materials_receipt', 'production_reception_receipt',
+      'consignment_receipt', 'wholesale_invoice', 'warehouse_pickup_ticket',
+      'production_order', 'production_materials_receipt', 'production_reception_receipt',
       'session_close_report', 'warehouse_operation', 'production_formula'
     ]
     const useEscPos = printer.supportsEscpos &&

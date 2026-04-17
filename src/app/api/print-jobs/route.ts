@@ -107,6 +107,23 @@ export async function POST(request: NextRequest) {
       service = serviceResult.rows[0]
     }
 
+    // Inject brand data into document for PDF generation
+    const enrichedData = { ...documentData }
+    if (!enrichedData.brandPrimaryColor || !enrichedData.brandDisplayName) {
+      try {
+        const companyResult = await db.query(
+          'SELECT name, logo_url, primary_color FROM companies WHERE id = $1',
+          [companyId]
+        )
+        if (companyResult.rows.length > 0) {
+          const company = companyResult.rows[0]
+          if (!enrichedData.brandDisplayName) enrichedData.brandDisplayName = company.name
+          if (!enrichedData.brandPrimaryColor && company.primary_color) enrichedData.brandPrimaryColor = company.primary_color
+          if (!enrichedData.brandLogo && company.logo_url) enrichedData.brandLogo = company.logo_url
+        }
+      } catch {}
+    }
+
     // Insert the print job
     const insertResult = await db.query(
       `INSERT INTO print_jobs (service_id, company_id, document_type, document_data, copies, requested_by, status)
@@ -116,7 +133,7 @@ export async function POST(request: NextRequest) {
         service.id,
         companyId,
         documentType,
-        JSON.stringify(documentData),
+        JSON.stringify(enrichedData),
         copies,
         userId,
       ]
