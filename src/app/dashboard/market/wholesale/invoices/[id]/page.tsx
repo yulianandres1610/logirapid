@@ -325,9 +325,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     } catch {} finally { setSavingTransport(false) }
   }
 
-  const handlePrintTransport = (transport: any) => {
-    if (!invoice) return
-    setPrintTransportData({
+  const buildTransportPrintData = (transport: any) => {
+    if (!invoice) return null
+    return {
       transportNumber: transport.transport_number,
       invoiceNumber: invoice.invoiceNumber,
       customer: {
@@ -343,12 +343,50 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         vehicleBrand: transport.vehicle_brand || '',
         vehiclePlate: transport.vehicle_plate
       },
+      products: invoice.lines.map(l => ({
+        name: l.productName,
+        sku: l.productSku,
+        quantity: l.quantity
+      })),
       amount: parseFloat(transport.amount) || 0,
       exchangeRate: parseFloat(transport.exchange_rate) || rates.CUP,
       createdAt: transport.created_at,
       notes: transport.notes
-    })
+    }
+  }
+
+  const handlePrintTransport = (transport: any) => {
+    const data = buildTransportPrintData(transport)
+    if (!data) return
+    setPrintTransportData(data)
     setShowPrintTransport(true)
+  }
+
+  const handleDownloadTransportPdf = async (transport: any) => {
+    const data = buildTransportPrintData(transport)
+    if (!data) return
+    try {
+      const res = await fetch('/api/print-jobs/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentType: 'transport_invoice', documentData: data })
+      })
+      if (res.ok) {
+        const result = await res.json()
+        if (result.success && result.data?.pdf) {
+          const byteCharacters = atob(result.data.pdf)
+          const byteNumbers = new Array(byteCharacters.length)
+          for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i)
+          const blob = new Blob([new Uint8Array(byteNumbers)], { type: 'application/pdf' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `Transporte-${transport.transport_number}.pdf`
+          a.click()
+          URL.revokeObjectURL(url)
+        }
+      }
+    } catch {}
   }
 
   // Fetch exchange rates
@@ -1867,14 +1905,22 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                               <p className="text-xs text-gray-400">Carnet</p>
                               <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.driver_id_card}</p>
                             </div>
-                            <div className="flex items-end justify-end">
+                            <div className="flex items-end justify-end gap-2">
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => handleDownloadTransportPdf(t)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30"
+                              >
+                                <FileDown className="w-3.5 h-3.5" /> Descargar PDF
+                              </motion.button>
                               <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={() => handlePrintTransport(t)}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30"
                               >
-                                <Printer className="w-3.5 h-3.5" /> Imprimir Factura
+                                <Printer className="w-3.5 h-3.5" /> Imprimir
                               </motion.button>
                             </div>
                           </div>
